@@ -28,9 +28,9 @@ ShuttleSync là hệ thống đặt lịch sân cầu lông trực tuyến dành
 
 | Thành phần  | Công nghệ |
 |------------|-----------|
-| Backend    | Java 17, Spring Boot 3, Spring Data JPA, SQL Server |
-| Frontend   | Next.js 15.3.1, React 19.1.0, TypeScript, Tailwind CSS 4.1.5 |
-| Auth       | Google OAuth 2.0 |
+| Backend    | Java 17, Spring Boot 3.4.5, Spring Data JPA, Spring Security, SQL Server |
+| Frontend   | Next.js 14.2.28, React 18.2.0, TypeScript, Tailwind CSS 3.4.17 |
+| Auth       | JWT, Spring Security |
 | Thanh toán | Momo, VNPAY |
 | Deploy     | Docker (trong cùng mạng Wi-Fi) |
 | Cơ sở dữ liệu | SQL Server |
@@ -40,16 +40,22 @@ ShuttleSync là hệ thống đặt lịch sân cầu lông trực tuyến dành
 
 ## 📁 Cấu trúc thư mục
 
+```
 ShuttleSync/
 ├── src/                # Backend: Spring Boot Application
 │   ├── main/
-│   └── Dockerfile
-├── frontend/           # Frontend: Next.js + React + Tailwind
-│   ├── app/
-│   └── tailwind.config.ts
+│   │   ├── java/       # Mã nguồn Java
+│   │   └── resources/  # Cấu hình ứng dụng
+│   └── test/           # Unit tests
+├── app/                # Frontend: Next.js pages & components
+├── components/         # Frontend: Shared components 
+├── lib/                # Frontend: Utility functions
+├── public/             # Frontend: Static assets
 ├── .gitignore
-├── docker-compose.yml
+├── pom.xml             # Maven configuration
+├── package.json        # npm configuration
 └── README.md
+```
 
 ---
 
@@ -60,8 +66,6 @@ ShuttleSync/
 ```bash
 git clone https://github.com/littlebadboy9x/ShuttleSync.git
 cd ShuttleSync
-
-
 ```
 
 ## 🚀 Hướng dẫn cài đặt Frontend (Next.js)
@@ -74,41 +78,58 @@ cd ShuttleSync
 - **Next.js:** ^14.2.28
 - **React:** ^18.2.0
 - **ReactDOM:** ^18.2.0
-- **Tailwind CSS:** ^3.3.0
-- **PostCSS:** ^8.4.0
-- **Autoprefixer:** ^10.4.0
+- **Tailwind CSS:** ^3.4.17
+- **PostCSS:** ^8.5.3
+- **Autoprefixer:** ^10.4.21
+- **TypeScript:** ^5.3.3
 
 ### Cài đặt nhanh
 ```bash
 # Clone dự án
- git clone https://github.com/littlebadboy9x/ShuttleSync.git
- cd ShuttleSync
+git clone https://github.com/littlebadboy9x/ShuttleSync.git
+cd ShuttleSync
 
 # Cài đặt dependencies
- npm install
+npm install
 
 # Nếu gặp lỗi xung đột, hãy xóa cache và cài lại:
- rm -rf node_modules package-lock.json .next
- npm install
+rm -rf node_modules package-lock.json .next
+npm install
 
 # Chạy dự án
- npm run dev
+npm run dev
 ```
 
-### Cấu hình PostCSS (postcss.config.js)
-```js
-module.exports = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-}
+## 🚀 Hướng dẫn cài đặt Backend (Spring Boot)
+
+### Yêu cầu môi trường
+- Java 17
+- Maven
+- SQL Server
+
+### Các phiên bản phụ thuộc chính
+- **Spring Boot:** 3.4.5
+- **Spring Security**
+- **Spring Data JPA**
+- **JWT:** 0.11.5
+- **SQL Server Driver**
+- **Lombok**
+
+### Cài đặt và chạy
+```bash
+# Cấu hình SQL Server
+# 1. Cài đặt SQL Server
+# 2. Thực thi script SQL để tạo database và bảng
+
+# Chạy ứng dụng Spring Boot
+mvn spring-boot:run
 ```
 
-### Cấu hình Tailwind (tailwind.config.ts)
-- Đảm bảo sử dụng đúng cấu trúc và các biến màu sắc như trong repo.
+### Cấu hình Database
+Chỉnh sửa thông tin kết nối database trong file `src/main/resources/application.properties`:
 
-### Lưu ý
-- **KHÔNG sử dụng Tailwind CSS v4.x** với Next.js 14, chỉ dùng v3.x.
-- Nếu gặp lỗi về phiên bản, hãy kiểm tra lại các phiên bản trong `package.json`.
-- Nếu dùng Windows, nên chạy terminal với quyền admin để tránh lỗi quyền truy cập.
+```properties
+spring.datasource.url=jdbc:sqlserver://localhost:1433;databaseName=ShuttleBook;encrypt=true;trustServerCertificate=true
+spring.datasource.username=sa
+spring.datasource.password=123456
+```
