@@ -61,3 +61,54 @@ ShuttleSync/
 git clone https://github.com/littlebadboy9x/ShuttleSync.git
 cd ShuttleSync
 
+
+```
+
+## 🚀 Hướng dẫn cài đặt Frontend (Next.js)
+
+### Yêu cầu môi trường
+- Node.js >= 18
+- npm >= 9
+
+### Các phiên bản phụ thuộc chính
+- **Next.js:** ^14.2.28
+- **React:** ^18.2.0
+- **ReactDOM:** ^18.2.0
+- **Tailwind CSS:** ^3.3.0
+- **PostCSS:** ^8.4.0
+- **Autoprefixer:** ^10.4.0
+
+### Cài đặt nhanh
+```bash
+# Clone dự án
+ git clone https://github.com/littlebadboy9x/ShuttleSync.git
+ cd ShuttleSync
+
+# Cài đặt dependencies
+ npm install
+
+# Nếu gặp lỗi xung đột, hãy xóa cache và cài lại:
+ rm -rf node_modules package-lock.json .next
+ npm install
+
+# Chạy dự án
+ npm run dev
+```
+
+### Cấu hình PostCSS (postcss.config.js)
+```js
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+```
+
+### Cấu hình Tailwind (tailwind.config.ts)
+- Đảm bảo sử dụng đúng cấu trúc và các biến màu sắc như trong repo.
+
+### Lưu ý
+- **KHÔNG sử dụng Tailwind CSS v4.x** với Next.js 14, chỉ dùng v3.x.
+- Nếu gặp lỗi về phiên bản, hãy kiểm tra lại các phiên bản trong `package.json`.
+- Nếu dùng Windows, nên chạy terminal với quyền admin để tránh lỗi quyền truy cập.
