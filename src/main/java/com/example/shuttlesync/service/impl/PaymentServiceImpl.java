@@ -4,10 +4,13 @@ import com.example.shuttlesync.dto.PaymentDto;
 import com.example.shuttlesync.exeption.BadRequestException;
 import com.example.shuttlesync.exeption.ResourceNotFoundException;
 import com.example.shuttlesync.model.Booking;
+import com.example.shuttlesync.model.BookingStatusType;
 import com.example.shuttlesync.model.Payment;
+import com.example.shuttlesync.model.PaymentStatusType;
 import com.example.shuttlesync.model.User;
 import com.example.shuttlesync.repository.BookingRepository;
 import com.example.shuttlesync.repository.PaymentRepository;
+import com.example.shuttlesync.repository.PaymentStatusTypeRepository;
 import com.example.shuttlesync.repository.UserRepository;
 import com.example.shuttlesync.service.PaymentService;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
+    private final PaymentStatusTypeRepository paymentStatusTypeRepository;
 
     @Override
     public List<Payment> getAllPayments() {
@@ -56,8 +60,17 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    public List<Payment> getPaymentsByStatus(String status) {
-        return paymentRepository.findByPaymentStatus(status);
+    public List<Payment> getPaymentsByStatus(String statusName) {
+        // Tìm statusId tương ứng với tên status
+        Optional<PaymentStatusType> statusType = paymentStatusTypeRepository.findAll().stream()
+            .filter(type -> type.getName().equalsIgnoreCase(statusName))
+            .findFirst();
+        
+        if (statusType.isEmpty()) {
+            throw new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán: " + statusName);
+        }
+        
+        return paymentRepository.findByStatus(statusType.get());
     }
 
     @Override
@@ -72,32 +85,46 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BadRequestException("Đã tồn tại thanh toán cho đơn đặt sân này");
         }
 
+        // Tìm status "Chưa thanh toán" (id = 1)
+        PaymentStatusType unpaidStatus = paymentStatusTypeRepository.findById((byte) 1)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán 'Chưa thanh toán'"));
+
         Payment payment = new Payment();
         payment.setBooking(booking);
         payment.setAmount(paymentDto.getAmount());
         payment.setPaymentMethod(paymentDto.getPaymentMethod());
-        payment.setPaymentStatus("Chưa thanh toán");
+        payment.setStatus(unpaidStatus);
 
         return paymentRepository.save(payment);
     }
 
     @Override
     @Transactional
-    public Payment updatePaymentStatus(Integer id, String status) {
+    public Payment updatePaymentStatus(Integer id, String statusName) {
         Payment payment = getPaymentById(id);
 
-        if (!status.equals("Đã thanh toán") && !status.equals("Chưa thanh toán")) {
+        byte statusId;
+        if (statusName.equalsIgnoreCase("Đã thanh toán")) {
+            statusId = 2; // ID cho "Đã thanh toán"
+        } else if (statusName.equalsIgnoreCase("Chưa thanh toán")) {
+            statusId = 1; // ID cho "Chưa thanh toán"
+        } else {
             throw new BadRequestException("Trạng thái không hợp lệ. Chỉ chấp nhận: Đã thanh toán, Chưa thanh toán");
         }
 
-        payment.setPaymentStatus(status);
+        PaymentStatusType statusType = paymentStatusTypeRepository.findById(statusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán với ID: " + statusId));
+        
+        payment.setStatus(statusType);
 
-        if (status.equals("Đã thanh toán")) {
+        if (statusId == 2) { // Đã thanh toán
             payment.setPaidAt(LocalDateTime.now());
 
-            // Cập nhật trạng thái đơn đặt sân thành confirmed
+            // Cập nhật trạng thái đơn đặt sân thành confirmed (id = 2)
             Booking booking = payment.getBooking();
-            booking.setStatus("confirmed");
+            BookingStatusType confirmedStatus = new BookingStatusType();
+            confirmedStatus.setId((byte) 2); // ID cho "Đã xác nhận"
+            booking.setStatus(confirmedStatus);
             bookingRepository.save(booking);
         }
 

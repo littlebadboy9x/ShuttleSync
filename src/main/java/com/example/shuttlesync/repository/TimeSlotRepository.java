@@ -21,9 +21,24 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
 
     List<TimeSlot> findByCourtOrderBySlotIndexAsc(Court court);
 
-    @Query("SELECT ts FROM TimeSlot ts WHERE ts.court.id = :courtId AND ts.id NOT IN " +
-            "(SELECT b.timeSlot.id FROM Booking b WHERE b.court.id = :courtId AND b.bookingDate = :date AND b.status != 'cancelled')")
-    List<TimeSlot> findAvailableTimeSlotsByCourtAndDate(@Param("courtId") Integer courtId, @Param("date") LocalDate date);
+    List<TimeSlot> findByCourtId(Integer courtId);
+
+    @Query("SELECT t FROM TimeSlot t WHERE t.court = :court AND t.slotIndex = :slotIndex")
+    List<TimeSlot> findByCourtAndSlotIndex(@Param("court") Court court, @Param("slotIndex") Integer slotIndex);
+
+    @Query("""
+        SELECT t FROM TimeSlot t 
+        WHERE t.court.id = :courtId 
+        AND t.id NOT IN (
+            SELECT b.timeSlot.id FROM Booking b 
+            WHERE b.court.id = :courtId 
+            AND b.bookingDate = :bookingDate
+            AND b.status.id IN (1, 2) 
+        )
+    """)
+    List<TimeSlot> findAvailableTimeSlotsByCourtAndDate(
+            @Param("courtId") Integer courtId, 
+            @Param("bookingDate") LocalDate bookingDate);
 
     @Query("SELECT ts FROM TimeSlot ts WHERE ts.startTime >= :startTime AND ts.endTime <= :endTime")
     List<TimeSlot> findByTimeRange(@Param("startTime") LocalTime startTime, @Param("endTime") LocalTime endTime);

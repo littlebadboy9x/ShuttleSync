@@ -19,18 +19,19 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @OneToOne
-    @JoinColumn(name = "BookingId")
+    @ManyToOne
+    @JoinColumn(name = "BookingId", nullable = false)
     private Booking booking;
 
-    @Column(name = "Amount")
+    @Column(name = "Amount", nullable = false)
     private BigDecimal amount;
 
-    @Column(name = "PaymentMethod")
+    @Column(name = "PaymentMethod", length = 50)
     private String paymentMethod;
 
-    @Column(name = "PaymentStatus")
-    private String paymentStatus; // 'Đã thanh toán' hoặc 'Chưa thanh toán'
+    @ManyToOne
+    @JoinColumn(name = "PaymentStatus", nullable = false)
+    private PaymentStatusType status;
 
     @Column(name = "CreatedAt")
     private LocalDateTime createdAt;

@@ -31,7 +31,8 @@ public class CourtServiceImpl implements CourtService {
 
     @Override
     public List<Court> getAvailableCourts() {
-        StatusType trongStatus = statusTypeRepository.findByName("Trống")
+        Byte trongStatusId = 1; // ID cho trạng thái "Trống" từ bảng StatusTypes
+        StatusType trongStatus = statusTypeRepository.findById(trongStatusId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Trống'"));
         
         return courtRepository.findByStatus(trongStatus);
@@ -39,6 +40,11 @@ public class CourtServiceImpl implements CourtService {
 
     @Override
     public Court createCourt(Court court) {
+        if (court.getStatus() == null) {
+            StatusType defaultStatus = statusTypeRepository.findById((byte)1)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Trống'"));
+            court.setStatus(defaultStatus);
+        }
         return courtRepository.save(court);
     }
 
@@ -48,7 +54,11 @@ public class CourtServiceImpl implements CourtService {
 
         court.setName(courtDetails.getName());
         court.setDescription(courtDetails.getDescription());
-        court.setStatus(courtDetails.getStatus());
+        
+        if (courtDetails.getStatus() != null) {
+            court.setStatus(courtDetails.getStatus());
+        }
+        
         court.setHasFixedTimeSlots(courtDetails.getHasFixedTimeSlots());
 
         return courtRepository.save(court);

@@ -2,6 +2,7 @@ package com.example.shuttlesync.repository;
 
 import com.example.shuttlesync.model.Booking;
 import com.example.shuttlesync.model.Payment;
+import com.example.shuttlesync.model.PaymentStatusType;
 import com.example.shuttlesync.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -20,11 +21,19 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     List<Payment> findByBookingUser(User user);
 
-    List<Payment> findByPaymentStatus(String status);
+    List<Payment> findByStatus(PaymentStatusType status);
 
-    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.paymentStatus = 'Đã thanh toán'")
+    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status.id = 2")
     BigDecimal getTotalPaidAmount();
 
-    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.paymentStatus = 'Đã thanh toán' AND p.paidAt BETWEEN :startDate AND :endDate")
+    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status.id = 2 AND p.paidAt BETWEEN :startDate AND :endDate")
     BigDecimal getTotalPaidAmountBetweenDates(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    List<Payment> findByBookingId(Integer bookingId);
+
+    @Query("SELECT p FROM Payment p WHERE p.booking.id = :bookingId AND p.status.id = 2")
+    Optional<Payment> findPaidPaymentByBookingId(@Param("bookingId") Integer bookingId);
+
+    @Query("SELECT p FROM Payment p WHERE p.status.id = 1 AND p.createdAt < :expiryTime")
+    List<Payment> findExpiredPayments(@Param("expiryTime") LocalDateTime expiryTime);
 }
