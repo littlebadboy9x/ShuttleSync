@@ -51,6 +51,14 @@ public class Booking {
     
     @OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     private CustomerBookingInfo customerBookingInfo;
+
+    @ManyToMany
+    @JoinTable(
+        name = "BookingDiscounts",
+        joinColumns = @JoinColumn(name = "BookingId"),
+        inverseJoinColumns = @JoinColumn(name = "DiscountId")
+    )
+    private Set<Discount> discounts = new HashSet<>();
     
     @PrePersist
     protected void onCreate() {

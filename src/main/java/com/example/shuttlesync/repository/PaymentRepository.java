@@ -21,23 +21,21 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     List<Payment> findByBookingUser(User user);
 
-    List<Payment> findByStatus(PaymentStatusType status);
+    List<Payment> findByPaymentStatus(PaymentStatusType paymentStatus);
 
-    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status.id = 2")
+    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.paymentStatus.id = 2")
     BigDecimal getTotalPaidAmount();
 
-    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.status.id = 2 AND p.paidAt BETWEEN :startDate AND :endDate")
+    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.paymentStatus.id = 2 AND p.paidAt BETWEEN :startDate AND :endDate")
     BigDecimal getTotalPaidAmountBetweenDates(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 
     List<Payment> findByBookingId(Integer bookingId);
 
-    @Query("SELECT p FROM Payment p WHERE p.booking.id = :bookingId AND p.status.id = 2")
+    @Query("SELECT p FROM Payment p WHERE p.booking.id = :bookingId AND p.paymentStatus.id = 2")
     Optional<Payment> findPaidPaymentByBookingId(@Param("bookingId") Integer bookingId);
 
-    @Query("SELECT p FROM Payment p WHERE p.status.id = 1 AND p.createdAt < :expiryTime")
+    @Query("SELECT p FROM Payment p WHERE p.paymentStatus.id = 1 AND p.createdAt < :expiryTime")
     List<Payment> findExpiredPayments(@Param("expiryTime") LocalDateTime expiryTime);
-
-    List<Payment> findByPaymentStatus(PaymentStatusType status);
 
     List<Payment> findByInvoiceId(Integer invoiceId);
 

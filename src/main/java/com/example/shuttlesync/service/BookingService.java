@@ -6,6 +6,7 @@ import com.example.shuttlesync.model.User;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface BookingService {
     
@@ -18,6 +19,8 @@ public interface BookingService {
     List<Booking> getBookingsByStatus(Byte statusId);
     
     Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate);
+    
+    Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate, Set<Integer> discountIds);
     
     Booking updateBookingStatus(Integer bookingId, Byte newStatusId, User changedBy);
     

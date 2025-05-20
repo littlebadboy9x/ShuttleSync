@@ -3,21 +3,15 @@ package com.example.shuttlesync.service.impl;
 import com.example.shuttlesync.dto.PaymentDto;
 import com.example.shuttlesync.exeption.BadRequestException;
 import com.example.shuttlesync.exeption.ResourceNotFoundException;
-import com.example.shuttlesync.model.Booking;
-import com.example.shuttlesync.model.BookingStatusType;
-import com.example.shuttlesync.model.Payment;
-import com.example.shuttlesync.model.PaymentStatusType;
-import com.example.shuttlesync.model.User;
-import com.example.shuttlesync.repository.BookingRepository;
-import com.example.shuttlesync.repository.PaymentRepository;
-import com.example.shuttlesync.repository.PaymentStatusTypeRepository;
-import com.example.shuttlesync.repository.UserRepository;
+import com.example.shuttlesync.model.*;
+import com.example.shuttlesync.repository.*;
 import com.example.shuttlesync.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +24,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final PaymentStatusTypeRepository paymentStatusTypeRepository;
+    private final DiscountRepository discountRepository;
 
     @Override
     public List<Payment> getAllPayments() {
@@ -37,107 +32,151 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    public Payment getPaymentById(Integer id) {
-        return paymentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với ID: " + id));
+    public Optional<Payment> getPaymentById(Integer id) {
+        return paymentRepository.findById(id);
     }
 
     @Override
-    public Payment getPaymentByBookingId(Integer bookingId) {
+    public List<Payment> getPaymentsByBookingId(Integer bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân với ID: " + bookingId));
+        return paymentRepository.findByBookingId(bookingId);
+    }
+
+    @Override
+    public List<Payment> getPaymentsByStatus(Byte statusId) {
+        PaymentStatusType status = paymentStatusTypeRepository.findById(statusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán với ID: " + statusId));
+        return paymentRepository.findByPaymentStatus(status);
+    }
+
+    @Override
+    @Transactional
+    public Payment createPayment(Integer bookingId, BigDecimal amount, String paymentMethod) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân với ID: " + bookingId));
 
-        return paymentRepository.findByBooking(booking)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán cho đơn đặt sân với ID: " + bookingId));
-    }
-
-    @Override
-    public List<Payment> getPaymentsByUser(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-
-        return paymentRepository.findByBookingUser(user);
-    }
-
-    @Override
-    public List<Payment> getPaymentsByStatus(String statusName) {
-        // Tìm statusId tương ứng với tên status
-        Optional<PaymentStatusType> statusType = paymentStatusTypeRepository.findAll().stream()
-            .filter(type -> type.getName().equalsIgnoreCase(statusName))
-            .findFirst();
-        
-        if (statusType.isEmpty()) {
-            throw new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán: " + statusName);
-        }
-        
-        return paymentRepository.findByStatus(statusType.get());
-    }
-
-    @Override
-    @Transactional
-    public Payment createPayment(PaymentDto paymentDto) {
-        Booking booking = bookingRepository.findById(paymentDto.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân với ID: " + paymentDto.getBookingId()));
-
-        // Kiểm tra xem đã có thanh toán cho đơn đặt sân này chưa
-        Optional<Payment> existingPayment = paymentRepository.findByBooking(booking);
-        if (existingPayment.isPresent()) {
-            throw new BadRequestException("Đã tồn tại thanh toán cho đơn đặt sân này");
-        }
-
-        // Tìm status "Chưa thanh toán" (id = 1)
-        PaymentStatusType unpaidStatus = paymentStatusTypeRepository.findById((byte) 1)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán 'Chưa thanh toán'"));
+        PaymentStatusType unpaidStatus = paymentStatusTypeRepository.findById((byte)1)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Chưa thanh toán'"));
 
         Payment payment = new Payment();
         payment.setBooking(booking);
-        payment.setAmount(paymentDto.getAmount());
-        payment.setPaymentMethod(paymentDto.getPaymentMethod());
-        payment.setStatus(unpaidStatus);
+        payment.setAmount(amount);
+        payment.setPaymentMethod(paymentMethod);
+        payment.setPaymentStatus(unpaidStatus);
+        payment.setCreatedAt(LocalDateTime.now());
 
         return paymentRepository.save(payment);
     }
 
     @Override
     @Transactional
-    public Payment updatePaymentStatus(Integer id, String statusName) {
-        Payment payment = getPaymentById(id);
+    public Payment updatePaymentStatus(Integer paymentId, Byte newStatusId, User changedBy) {
+        Payment payment = getPaymentById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với ID: " + paymentId));
 
-        byte statusId;
-        if (statusName.equalsIgnoreCase("Đã thanh toán")) {
-            statusId = 2; // ID cho "Đã thanh toán"
-        } else if (statusName.equalsIgnoreCase("Chưa thanh toán")) {
-            statusId = 1; // ID cho "Chưa thanh toán"
-        } else {
-            throw new BadRequestException("Trạng thái không hợp lệ. Chỉ chấp nhận: Đã thanh toán, Chưa thanh toán");
-        }
+        PaymentStatusType newStatus = paymentStatusTypeRepository.findById(newStatusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán với ID: " + newStatusId));
 
-        PaymentStatusType statusType = paymentStatusTypeRepository.findById(statusId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán với ID: " + statusId));
-        
-        payment.setStatus(statusType);
-
-        if (statusId == 2) { // Đã thanh toán
+        payment.setPaymentStatus(newStatus);
+        if (newStatusId == 2) { // Đã thanh toán
             payment.setPaidAt(LocalDateTime.now());
-
-            // Cập nhật trạng thái đơn đặt sân thành confirmed (id = 2)
-            Booking booking = payment.getBooking();
-            BookingStatusType confirmedStatus = new BookingStatusType();
-            confirmedStatus.setId((byte) 2); // ID cho "Đã xác nhận"
-            booking.setStatus(confirmedStatus);
-            bookingRepository.save(booking);
         }
 
         return paymentRepository.save(payment);
     }
 
     @Override
-    public BigDecimal getTotalPaidAmount() {
-        return paymentRepository.getTotalPaidAmount();
+    @Transactional
+    public Payment addDiscountToPayment(Integer paymentId, Integer discountId) {
+        Payment payment = getPaymentById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với ID: " + paymentId));
+
+        Discount discount = discountRepository.findById(discountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy mã giảm giá với ID: " + discountId));
+
+        // Kiểm tra thời hạn giảm giá
+        LocalDate today = LocalDate.now();
+        if (today.isAfter(discount.getValidFrom()) && 
+            (discount.getValidTo() == null || today.isBefore(discount.getValidTo()))) {
+            
+            // Tính toán số tiền giảm giá
+            BigDecimal discountAmount = payment.getAmount()
+                    .multiply(BigDecimal.valueOf(discount.getDiscountPercent()))
+                    .divide(BigDecimal.valueOf(100));
+            
+            // Cập nhật số tiền thanh toán
+            payment.setAmount(payment.getAmount().subtract(discountAmount));
+            
+            return paymentRepository.save(payment);
+        } else {
+            throw new BadRequestException("Mã giảm giá đã hết hạn");
+        }
     }
 
     @Override
-    public BigDecimal getTotalPaidAmountBetweenDates(LocalDateTime startDate, LocalDateTime endDate) {
-        return paymentRepository.getTotalPaidAmountBetweenDates(startDate, endDate);
+    @Transactional
+    public Payment removeDiscountFromPayment(Integer paymentId, Integer discountId) {
+        Payment payment = getPaymentById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với ID: " + paymentId));
+
+        Discount discount = discountRepository.findById(discountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy mã giảm giá với ID: " + discountId));
+
+        // Tính toán số tiền giảm giá đã áp dụng
+        BigDecimal discountAmount = payment.getAmount()
+                .multiply(BigDecimal.valueOf(discount.getDiscountPercent()))
+                .divide(BigDecimal.valueOf(100));
+
+        // Cập nhật số tiền thanh toán
+        payment.setAmount(payment.getAmount().add(discountAmount));
+
+        return paymentRepository.save(payment);
+    }
+
+    @Override
+    public List<Payment> getPaymentsByInvoiceId(Integer invoiceId) {
+        return paymentRepository.findByInvoiceId(invoiceId);
+    }
+
+    @Override
+    public BigDecimal calculateTotalAmount(Integer paymentId) {
+        Payment payment = getPaymentById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với ID: " + paymentId));
+        return payment.getAmount();
+    }
+
+    @Override
+    @Transactional
+    public void processPayment(Integer paymentId, String paymentMethod) {
+        Payment payment = getPaymentById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thanh toán với ID: " + paymentId));
+        
+        // Kiểm tra trạng thái hiện tại
+        PaymentStatusType currentStatus = payment.getPaymentStatus();
+        if (currentStatus.getId() == 2) { // Đã thanh toán
+            throw new BadRequestException("Thanh toán này đã được xử lý trước đó");
+        }
+        
+        // Cập nhật phương thức thanh toán
+        payment.setPaymentMethod(paymentMethod);
+        
+        // Cập nhật trạng thái thành "Đã thanh toán"
+        PaymentStatusType paidStatus = paymentStatusTypeRepository.findById((byte)2)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Đã thanh toán'"));
+        payment.setPaymentStatus(paidStatus);
+        
+        // Cập nhật thời gian thanh toán
+        payment.setPaidAt(LocalDateTime.now());
+        
+        // Lưu thay đổi
+        paymentRepository.save(payment);
+        
+        // Cập nhật trạng thái đặt sân thành "Đã xác nhận"
+        Booking booking = payment.getBooking();
+        BookingStatusType confirmedStatus = new BookingStatusType();
+        confirmedStatus.setId((byte)2); // ID cho "Đã xác nhận"
+        booking.setStatus(confirmedStatus);
+        bookingRepository.save(booking);
     }
 }

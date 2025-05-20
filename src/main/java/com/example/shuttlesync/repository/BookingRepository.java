@@ -61,4 +61,18 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
     @Query("SELECT b FROM Booking b WHERE b.status.id = :statusId")
     List<Booking> findByStatusId(@Param("statusId") Byte statusId);
+
+    @Query("""
+        SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END
+        FROM Booking b
+        WHERE b.court.id = :courtId
+        AND b.timeSlot.id = :timeSlotId
+        AND b.bookingDate = :bookingDate
+        AND b.status.id != :statusId
+    """)
+    boolean existsByCourtIdAndTimeSlotIdAndBookingDateAndStatusIdNot(
+            @Param("courtId") Integer courtId,
+            @Param("timeSlotId") Integer timeSlotId,
+            @Param("bookingDate") LocalDate bookingDate,
+            @Param("statusId") Byte statusId);
 }

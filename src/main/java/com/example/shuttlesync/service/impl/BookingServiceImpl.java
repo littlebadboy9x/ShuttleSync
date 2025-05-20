@@ -83,7 +83,7 @@ public class BookingServiceImpl implements BookingService {
         }
         
         // Kiểm tra xem khung giờ đã được đặt chưa
-        if (bookingRepository.isTimeSlotBooked(court, timeSlot, bookingDate)) {
+        if (isTimeSlotBooked(courtId, timeSlotId, bookingDate)) {
             throw new IllegalArgumentException("Khung giờ này đã được đặt cho ngày " + bookingDate);
         }
         
@@ -186,7 +186,7 @@ public class BookingServiceImpl implements BookingService {
             payment.setBooking(booking);
             payment.setAmount(booking.getTimeSlot().getPrice());
             payment.setPaymentMethod("Chưa chọn");
-            payment.setStatus(new PaymentStatusType((byte)1, "Chưa thanh toán", null)); // ID = 1 cho "Chưa thanh toán"
+            payment.setPaymentStatus(new PaymentStatusType((byte)1, "Chưa thanh toán", null)); // ID = 1 cho "Chưa thanh toán"
             payment.setCreatedAt(LocalDateTime.now());
             paymentRepository.save(payment);
             
@@ -301,7 +301,7 @@ public class BookingServiceImpl implements BookingService {
         
         PaymentStatusType unpaidStatus = new PaymentStatusType();
         unpaidStatus.setId((byte) 1); // 1: Chưa thanh toán
-        payment.setStatus(unpaidStatus);
+        payment.setPaymentStatus(unpaidStatus);
         
         paymentRepository.save(payment);
     }
@@ -327,7 +327,7 @@ public class BookingServiceImpl implements BookingService {
             Payment latestPayment = payments.get(0);
             bookingInfo.setPaymentAmount(latestPayment.getAmount());
             bookingInfo.setPaymentMethod(latestPayment.getPaymentMethod());
-            bookingInfo.setPaymentStatus(latestPayment.getStatus().getName());
+            bookingInfo.setPaymentStatus(latestPayment.getPaymentStatus().getName());
         }
         
         customerBookingInfoRepository.save(bookingInfo);
@@ -363,5 +363,45 @@ public class BookingServiceImpl implements BookingService {
         return systemConfigRepository.findByConfigKey("MIN_BOOKING_HOURS_IN_ADVANCE")
                 .map(config -> Integer.parseInt(config.getConfigValue()))
                 .orElse(2); // Mặc định là 2 giờ
+    }
+    
+    @Override
+    public boolean isTimeSlotBooked(Integer courtId, Integer timeSlotId, LocalDate date) {
+        return bookingRepository.existsByCourtIdAndTimeSlotIdAndBookingDateAndStatusIdNot(
+            courtId, 
+            timeSlotId, 
+            date,
+            (byte)3 // ID cho trạng thái "Đã hủy"
+        );
+    }
+
+    @Override
+    public List<Booking> getBookingsByDate(LocalDate date) {
+        return bookingRepository.findBookingsByDate(date);
+    }
+
+    @Override
+    public List<Booking> getBookingsBetweenDates(LocalDate startDate, LocalDate endDate) {
+        return bookingRepository.findBookingsBetweenDates(startDate, endDate);
+    }
+
+    @Override
+    public List<Booking> getBookingsByCourtAndDate(Integer courtId, LocalDate date) {
+        return bookingRepository.findBookingsByCourtAndDate(courtId, date);
+    }
+
+    @Override
+    public Long countConfirmedBookingsByUser(Integer userId) {
+        return bookingRepository.countConfirmedBookingsByUser(userId);
+    }
+
+    @Override
+    public List<Booking> getActiveBookingsByCourtAndDate(Integer courtId, LocalDate date) {
+        return bookingRepository.findActiveBookingsByCourtAndDate(courtId, date);
+    }
+
+    @Override
+    public Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate) {
+        return createBooking(userId, courtId, timeSlotId, bookingDate, null);
     }
 } 
