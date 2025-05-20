@@ -36,4 +36,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     @Query("SELECT p FROM Payment p WHERE p.status.id = 1 AND p.createdAt < :expiryTime")
     List<Payment> findExpiredPayments(@Param("expiryTime") LocalDateTime expiryTime);
+
+    List<Payment> findByPaymentStatus(PaymentStatusType status);
+
+    List<Payment> findByInvoiceId(Integer invoiceId);
+
+    @Query("SELECT p FROM Payment p WHERE p.booking.id = :bookingId AND p.paymentStatus.id = :statusId")
+    List<Payment> findByBookingIdAndStatusId(@Param("bookingId") Integer bookingId, @Param("statusId") Byte statusId);
+
+    @Query("SELECT SUM(p.amount) FROM Payment p WHERE p.booking.id = :bookingId AND p.paymentStatus.id = 2")
+    BigDecimal getTotalPaidAmountByBookingId(@Param("bookingId") Integer bookingId);
 }

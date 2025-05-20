@@ -20,22 +20,22 @@ public class TimeSlotConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "SlotDurationMinutes")
+    @Column(name = "SlotDurationMinutes", nullable = false)
     private Integer slotDurationMinutes;
 
-    @Column(name = "StartTimeFirstSlot")
+    @Column(name = "StartTimeFirstSlot", nullable = false)
     private LocalTime startTimeFirstSlot;
 
-    @Column(name = "EndTimeLastSlot")
+    @Column(name = "EndTimeLastSlot", nullable = false)
     private LocalTime endTimeLastSlot;
 
-    @Column(name = "MaxSlotsPerDay")
+    @Column(name = "MaxSlotsPerDay", nullable = false)
     private Integer maxSlotsPerDay;
 
     @Column(name = "IsActive")
-    private Boolean isActive;
+    private Boolean isActive = true;
 
-    @Column(name = "EffectiveFrom")
+    @Column(name = "EffectiveFrom", nullable = false)
     private LocalDate effectiveFrom;
 
     @Column(name = "EffectiveTo")

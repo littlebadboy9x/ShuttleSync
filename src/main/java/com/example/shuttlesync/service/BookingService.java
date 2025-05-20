@@ -6,7 +6,6 @@ import com.example.shuttlesync.model.User;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 public interface BookingService {
     
@@ -18,9 +17,21 @@ public interface BookingService {
     
     List<Booking> getBookingsByStatus(Byte statusId);
     
-    Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate, Set<Integer> discountIds);
+    Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate);
     
     Booking updateBookingStatus(Integer bookingId, Byte newStatusId, User changedBy);
     
     void cancelBooking(Integer bookingId, User user);
+    
+    List<Booking> getBookingsByDate(LocalDate date);
+    
+    List<Booking> getBookingsBetweenDates(LocalDate startDate, LocalDate endDate);
+    
+    List<Booking> getBookingsByCourtAndDate(Integer courtId, LocalDate date);
+    
+    Long countConfirmedBookingsByUser(Integer userId);
+    
+    List<Booking> getActiveBookingsByCourtAndDate(Integer courtId, LocalDate date);
+    
+    boolean isTimeSlotBooked(Integer courtId, Integer timeSlotId, LocalDate bookingDate);
 }

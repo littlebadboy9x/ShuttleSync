@@ -18,17 +18,17 @@ public class HolidayDate {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "HolidayDate", nullable = false)
+    @Column(name = "HolidayDate", nullable = false, unique = true)
     private LocalDate holidayDate;
 
     @Column(name = "HolidayName", nullable = false, length = 100)
     private String holidayName;
 
-    @Column(name = "Description")
+    @Column(name = "Description", length = 255)
     private String description;
 
     @Column(name = "IsRecurringYearly")
-    private Boolean isRecurringYearly;
+    private Boolean isRecurringYearly = false;
 
     @ManyToOne
     @JoinColumn(name = "CreatedBy")

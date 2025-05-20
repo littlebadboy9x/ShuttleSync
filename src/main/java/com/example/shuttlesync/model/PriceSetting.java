@@ -27,16 +27,17 @@ public class PriceSetting {
     @Column(name = "TimeSlotIndex")
     private Integer timeSlotIndex;
 
-    @Column(name = "DayType", length = 20)
-    private String dayType;  // 'weekday', 'weekend', 'holiday'
+    @Column(name = "DayType", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    private DayType dayType;
 
-    @Column(name = "Price", precision = 10, scale = 2, nullable = false)
+    @Column(name = "Price", nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
     @Column(name = "IsActive")
-    private Boolean isActive;
+    private Boolean isActive = true;
 
-    @Column(name = "EffectiveFrom")
+    @Column(name = "EffectiveFrom", nullable = false)
     private LocalDate effectiveFrom;
 
     @Column(name = "EffectiveTo")
@@ -52,13 +53,16 @@ public class PriceSetting {
     @JoinColumn(name = "UpdatedBy")
     private User updatedBy;
 
+    public enum DayType {
+        weekday,
+        weekend,
+        holiday
+    }
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        if (isActive == null) {
-            isActive = true;
-        }
     }
 
     @PreUpdate
