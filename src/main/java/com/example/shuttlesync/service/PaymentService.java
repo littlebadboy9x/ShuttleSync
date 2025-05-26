@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.transaction.annotation.Transactional;
+
 public interface PaymentService {
     
     List<Payment> getAllPayments();
@@ -29,5 +31,8 @@ public interface PaymentService {
     
     BigDecimal calculateTotalAmount(Integer paymentId);
     
+    @Transactional
     void processPayment(Integer paymentId, String paymentMethod);
+
+    BigDecimal getTotalPaidAmount();
 }

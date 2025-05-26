@@ -1,5 +1,6 @@
 package com.example.shuttlesync.service.impl;
 
+import com.example.shuttlesync.dto.BookingDTO;
 import com.example.shuttlesync.exeption.ResourceNotFoundException;
 import com.example.shuttlesync.model.*;
 import com.example.shuttlesync.repository.*;
@@ -17,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -403,5 +405,26 @@ public class BookingServiceImpl implements BookingService {
     @Override
     public Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate) {
         return createBooking(userId, courtId, timeSlotId, bookingDate, null);
+    }
+
+    @Override
+    public List<BookingDTO> getRecentBookings() {
+        List<Booking> bookings = bookingRepository.findFirst10ByOrderByCreatedAtDesc();
+        return bookings.stream()
+                .limit(10)
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    private BookingDTO convertToDTO(Booking booking) {
+        BookingDTO dto = new BookingDTO();
+        dto.setId(booking.getId());
+        dto.setUserName(booking.getUser().getFullName());
+        dto.setCourtName(booking.getCourt().getName());
+        dto.setBookingDate(booking.getBookingDate());
+        dto.setStartTime(booking.getTimeSlot().getStartTime().toString());
+        dto.setEndTime(booking.getTimeSlot().getEndTime().toString());
+        dto.setStatus(booking.getStatus().getId().toString());
+        return dto;
     }
 } 
