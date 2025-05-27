@@ -55,21 +55,23 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-            .cors(cors -> {})
-            .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(request -> "OPTIONS".equals(request.getMethod())).permitAll()
-                .requestMatchers(new AntPathRequestMatcher("/auth/**")).permitAll()
-                .requestMatchers(new AntPathRequestMatcher("/api/admin/**")).hasRole("ADMIN")
-                .requestMatchers(new AntPathRequestMatcher("/api/customer/**")).hasRole("CUSTOMER")
-                .anyRequest().authenticated()
-            )
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
-            .authenticationProvider(authenticationProvider())
-            .addFilterBefore(corsConfig.corsFilter(), UsernamePasswordAuthenticationFilter.class)
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-            .build();
+                .cors(cors -> {
+                })
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(request -> "OPTIONS".equals(request.getMethod())).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/auth/**")).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/api/admin/**")).hasRole("ADMIN")
+                        .requestMatchers(new AntPathRequestMatcher("/api/customer/**")).hasRole("CUSTOMER")
+                        .requestMatchers(new AntPathRequestMatcher("/api/bookings/**")).hasRole("ADMIN")
+                        .anyRequest().authenticated()
+                )
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                .authenticationProvider(authenticationProvider())
+                .addFilterBefore(corsConfig.corsFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .build();
     }
 }
