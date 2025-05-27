@@ -134,16 +134,16 @@ public class CourtsController {
         }
     }
 
-    @PutMapping("/{id}/toggle-status")
-    public ResponseEntity<Court> toggleCourtStatus(@PathVariable Integer id) {
-        try {
-            logger.info("Toggling status for court with id: " + id);
-            Court updatedCourt = courtService.toggleCourtStatus(id);
-            logger.info("Toggled status for court: " + updatedCourt.getName());
-            return ResponseEntity.ok(updatedCourt);
-        } catch (Exception e) {
-            logger.severe("Error toggling status for court " + id + ": " + e.getMessage());
-            throw e;
-        }
-    }
+//    @PutMapping("/{id}/toggle-status")
+//    public ResponseEntity<Court> toggleCourtStatus(@PathVariable Integer id) {
+//        try {
+//            logger.info("Toggling status for court with id: " + id);
+//            Court updatedCourt = courtService.toggleCourtStatus(id);
+//            logger.info("Toggled status for court: " + updatedCourt.getName());
+//            return ResponseEntity.ok(updatedCourt);
+//        } catch (Exception e) {
+//            logger.severe("Error toggling status for court " + id + ": " + e.getMessage());
+//            throw e;
+//        }
+//    }
 }
