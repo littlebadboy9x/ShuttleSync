@@ -2,6 +2,7 @@ package com.example.shuttlesync.service;
 
 import com.example.shuttlesync.model.Booking;
 import com.example.shuttlesync.model.User;
+import com.example.shuttlesync.dto.BookingDTO;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -37,4 +38,6 @@ public interface BookingService {
     List<Booking> getActiveBookingsByCourtAndDate(Integer courtId, LocalDate date);
     
     boolean isTimeSlotBooked(Integer courtId, Integer timeSlotId, LocalDate bookingDate);
+
+    List<BookingDTO> getRecentBookings();
 }

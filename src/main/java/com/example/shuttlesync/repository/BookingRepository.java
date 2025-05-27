@@ -75,4 +75,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("timeSlotId") Integer timeSlotId,
             @Param("bookingDate") LocalDate bookingDate,
             @Param("statusId") Byte statusId);
+
+    @Query("SELECT b FROM Booking b ORDER BY b.createdAt DESC")
+    List<Booking> findFirst10ByOrderByCreatedAtDesc();
 }

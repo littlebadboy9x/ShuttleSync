@@ -179,4 +179,9 @@ public class PaymentServiceImpl implements PaymentService {
         booking.setStatus(confirmedStatus);
         bookingRepository.save(booking);
     }
+
+    @Override
+    public BigDecimal getTotalPaidAmount() {
+        return paymentRepository.getTotalPaidAmount();
+    }
 }
