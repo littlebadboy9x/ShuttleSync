@@ -34,4 +34,6 @@ build/
 
 node_modules/
 sql/
+HEAD
 .next/
+origin/chinh

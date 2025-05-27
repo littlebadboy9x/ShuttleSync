@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -19,42 +19,223 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { AdminLayout } from "@/components/admin-layout"
 import { Plus } from "lucide-react"
+import axios from "axios"
 
-// Dữ liệu mẫu cho sân
-const courts = Array.from({ length: 20 }, (_, i) => ({
-    id: i + 1,
-    name: `Sân ${i + 1}`,
-    description: `Sân cầu lông tiêu chuẩn với sàn và hệ thống chiếu sáng chuyên nghiệp.`,
-    status: i % 5 === 0 ? "maintenance" : "available",
-}))
+interface StatusType {
+    id: number;
+    name: string;
+    description: string;
+}
+
+interface Court {
+    id: number;
+    name: string;
+    description: string;
+    status: StatusType;
+    hasFixedTimeSlots: boolean;
+}
+
+const API_URL = 'http://localhost:8080/api/courts';
+
+const getAuthHeader = () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return {};
+    
+    const user = JSON.parse(userStr);
+    return {
+        headers: {
+            'Authorization': `Bearer ${user.token}`
+        }
+    };
+};
+
+const fetchCourts = async (): Promise<Court[]> => {
+    try {
+        const response = await axios.get<Court[]>(API_URL, getAuthHeader());
+        console.log('Raw API Response:', response);
+        
+        if (!response.data) {
+            console.error('No data received from API');
+            return [];
+        }
+
+        // Đảm bảo response.data là một mảng
+        const courtsData = Array.isArray(response.data) ? response.data : [response.data];
+        
+        // Log để xem cấu trúc thực tế của dữ liệu
+        courtsData.forEach(court => {
+            console.log('Court status type:', typeof court.status);
+            console.log('Court status value:', court.status);
+            if (typeof court.status === 'object') {
+                console.log('Court status object properties:', Object.keys(court.status));
+            }
+        });
+
+        // Xử lý và validate từng court object
+        const validCourts = courtsData.map(court => ({
+            id: Number(court.id) || 0,
+            name: String(court.name || ''),
+            description: String(court.description || ''),
+            status: court.status, // Giữ nguyên status để debug
+            hasFixedTimeSlots: Boolean(court.hasFixedTimeSlots)
+        }));
+
+        console.log('Processed Courts:', validCourts);
+        return validCourts;
+    } catch (error: any) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
+        console.error("Error fetching courts:", error);
+        return [];
+    }
+};
 
 export default function CourtsPage() {
+    const [courts, setCourts] = useState<Court[]>([])
     const [searchQuery, setSearchQuery] = useState("")
-    const [isAddCourtOpen, setIsAddCourtOpen] = useState(false)
-    const [newCourt, setNewCourt] = useState({
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [selectedCourt, setSelectedCourt] = useState<Court | null>(null)
+    const [editForm, setEditForm] = useState({
         name: "",
         description: "",
     })
 
-    // Lọc sân dựa trên truy vấn tìm kiếm
-    const filteredCourts = courts.filter((court) => court.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    useEffect(() => {
+        loadCourts()
+    }, [])
 
-    const handleAddCourt = () => {
-        // Trong ứng dụng thực tế, đây sẽ là một API call để thêm sân mới
-        console.log("Thêm sân mới:", newCourt)
-        setNewCourt({ name: "", description: "" })
-        setIsAddCourtOpen(false)
+    const loadCourts = async () => {
+        try {
+            setIsLoading(true)
+            setError(null)
+            const data = await fetchCourts()
+            console.log('Courts data loaded:', data)
+            setCourts(Array.isArray(data) ? data : [])
+        } catch (error) {
+            console.error("Failed to load courts:", error)
+            setError("Không thể tải dữ liệu sân. Vui lòng thử lại sau.")
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    // Lọc sân dựa trên courts từ API
+    const filteredCourts = courts.filter((court) => 
+        court.name.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+
+    const handleEditClick = (court: Court) => {
+        setSelectedCourt(court);
+        setEditForm({
+            name: court.name,
+            description: court.description,
+        });
+        setIsEditModalOpen(true);
+    };
+
+    const handleUpdateCourt = async () => {
+        if (!selectedCourt) return;
+
+        try {
+            const response = await axios.put<Court>(
+                `${API_URL}/${selectedCourt.id}`,
+                {
+                    ...selectedCourt,
+                    name: editForm.name,
+                    description: editForm.description,
+                },
+                getAuthHeader()
+            );
+
+            // Cập nhật danh sách sân
+            setCourts(courts.map(court => 
+                court.id === selectedCourt.id ? response.data : court
+            ));
+
+            setIsEditModalOpen(false);
+            setSelectedCourt(null);
+        } catch (error) {
+            console.error("Error updating court:", error);
+        }
+    };
+
+    const handleToggleStatus = async (court: Court) => {
+        try {
+            const response = await axios.put<Court>(
+                `${API_URL}/${court.id}/toggle-status`,
+                {},
+                getAuthHeader()
+            );
+            
+            // Cập nhật danh sách sân
+            setCourts(courts.map(c => 
+                c.id === court.id ? response.data : c
+            ));
+        } catch (error) {
+            console.error("Error toggling court status:", error);
+        }
     }
 
     // Ánh xạ trạng thái sang tiếng Việt
-    const getStatusText = (status: string) => {
-        switch (status) {
-            case "available":
-                return "Khả dụng"
-            case "maintenance":
-                return "Bảo trì"
+    const getStatusText = (status: StatusType | number) => {
+        const statusId = typeof status === 'object' ? status.id : Number(status);
+        
+        switch (statusId) {
+            case 1:
+                return "Trống";
+            case 2:
+                return "Đầy";
+            case 3:
+                return "Bảo trì";
             default:
-                return status
+                return "Không xác định";
+        }
+    }
+
+    const getStatusVariant = (status: StatusType | number) => {
+        const statusId = typeof status === 'object' ? status.id : Number(status);
+        
+        switch (statusId) {
+            case 1: // Trống
+                return "default";
+            case 2: // Đầy
+                return "secondary";
+            case 3: // Bảo trì
+                return "destructive";
+            default:
+                return "outline";
+        }
+    }
+
+    const getActionButtonText = (status: StatusType | number) => {
+        const statusId = typeof status === 'object' ? status.id : Number(status);
+        switch (statusId) {
+            case 1: // Trống
+                return "Đặt đầy";
+            case 2: // Đầy
+                return "Đặt bảo trì";
+            case 3: // Bảo trì
+                return "Đặt trống";
+            default:
+                return "Chuyển trạng thái";
+        }
+    }
+
+    const getActionButtonVariant = (status: StatusType | number) => {
+        const statusId = typeof status === 'object' ? status.id : Number(status);
+        switch (statusId) {
+            case 1: // Trống -> Đầy
+                return "secondary";
+            case 2: // Đầy -> Bảo trì
+                return "destructive";
+            case 3: // Bảo trì -> Trống
+                return "default";
+            default:
+                return "outline";
         }
     }
 
@@ -70,46 +251,6 @@ export default function CourtsPage() {
                                 <CardTitle>Sân Cầu Lông</CardTitle>
                                 <CardDescription>Quản lý tất cả sân cầu lông</CardDescription>
                             </div>
-                            <Dialog open={isAddCourtOpen} onOpenChange={setIsAddCourtOpen}>
-                                <DialogTrigger asChild>
-                                    <Button>
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Thêm Sân
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Thêm Sân Mới</DialogTitle>
-                                        <DialogDescription>Nhập thông tin cho sân cầu lông mới.</DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid gap-4 py-4">
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="name">Tên Sân</Label>
-                                            <Input
-                                                id="name"
-                                                value={newCourt.name}
-                                                onChange={(e) => setNewCourt({ ...newCourt, name: e.target.value })}
-                                                placeholder="Sân 21"
-                                            />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="description">Mô Tả</Label>
-                                            <Textarea
-                                                id="description"
-                                                value={newCourt.description}
-                                                onChange={(e) => setNewCourt({ ...newCourt, description: e.target.value })}
-                                                placeholder="Sân cầu lông tiêu chuẩn với sàn và hệ thống chiếu sáng chuyên nghiệp."
-                                            />
-                                        </div>
-                                    </div>
-                                    <DialogFooter>
-                                        <Button variant="outline" onClick={() => setIsAddCourtOpen(false)}>
-                                            Hủy
-                                        </Button>
-                                        <Button onClick={handleAddCourt}>Thêm Sân</Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -134,34 +275,105 @@ export default function CourtsPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredCourts.map((court) => (
-                                        <TableRow key={court.id}>
-                                            <TableCell className="font-medium">#{court.id}</TableCell>
-                                            <TableCell>{court.name}</TableCell>
-                                            <TableCell className="max-w-xs truncate">{court.description}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={court.status === "available" ? "default" : "destructive"}>
-                                                    {getStatusText(court.status)}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex space-x-2">
-                                                    <Button variant="outline" size="sm">
-                                                        Sửa
-                                                    </Button>
-                                                    <Button variant={court.status === "available" ? "destructive" : "default"} size="sm">
-                                                        {court.status === "available" ? "Đặt Bảo Trì" : "Đặt Khả Dụng"}
-                                                    </Button>
-                                                </div>
+                                    {isLoading ? (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center">
+                                                Đang tải dữ liệu...
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                    ) : error ? (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center text-red-500">
+                                                {error}
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : filteredCourts.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center">
+                                                Không tìm thấy sân nào
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        filteredCourts.map((court) => (
+                                            <TableRow key={court.id || 'unknown'}>
+                                                <TableCell className="font-medium">
+                                                    #{String(court.id || '')}
+                                                </TableCell>
+                                                <TableCell>{String(court.name || '')}</TableCell>
+                                                <TableCell className="max-w-xs truncate">
+                                                    {String(court.description || '')}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant={getStatusVariant(court.status)}>
+                                                        {getStatusText(court.status)}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex space-x-2">
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm"
+                                                            onClick={() => handleEditClick(court)}
+                                                        >
+                                                            Sửa
+                                                        </Button>
+                                                        <Button 
+                                                            variant={getActionButtonVariant(court.status)}
+                                                            size="sm"
+                                                            onClick={() => handleToggleStatus(court)}
+                                                        >
+                                                            {getActionButtonText(court.status)}
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
                                 </TableBody>
                             </Table>
                         </div>
                     </CardContent>
                 </Card>
             </div>
+
+            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Sửa Thông Tin Sân</DialogTitle>
+                        <DialogDescription>
+                            Chỉnh sửa thông tin cho sân {selectedCourt?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="edit-name">Tên Sân</Label>
+                            <Input
+                                id="edit-name"
+                                value={editForm.name}
+                                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                                placeholder="Nhập tên sân"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="edit-description">Mô Tả</Label>
+                            <Textarea
+                                id="edit-description"
+                                value={editForm.description}
+                                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                                placeholder="Nhập mô tả sân"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+                            Hủy
+                        </Button>
+                        <Button onClick={handleUpdateCourt}>
+                            Lưu Thay Đổi
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AdminLayout>
     )
 }
