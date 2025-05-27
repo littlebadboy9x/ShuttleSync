@@ -79,4 +79,33 @@ public class CourtServiceImpl implements CourtService {
     public List<Court> getCourtsWithoutFixedTimeSlots() {
         return courtRepository.findCourtsWithoutFixedTimeSlots();
     }
+
+    @Override
+    public Court toggleCourtStatus(Integer id) {
+        Court court = getCourtById(id);
+        
+        // Rotate through status: Trống (1) -> Đầy (2) -> Bảo trì (3) -> Trống (1)
+        byte currentStatusId = court.getStatus().getId();
+        byte newStatusId;
+        
+        switch (currentStatusId) {
+            case 1: // Trống -> Đầy
+                newStatusId = 2;
+                break;
+            case 2: // Đầy -> Bảo trì
+                newStatusId = 3;
+                break;
+            case 3: // Bảo trì -> Trống
+                newStatusId = 1;
+                break;
+            default:
+                newStatusId = 1; // Mặc định về trạng thái Trống
+        }
+        
+        StatusType newStatus = statusTypeRepository.findById(newStatusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Status type not found with ID: " + newStatusId));
+        
+        court.setStatus(newStatus);
+        return courtRepository.save(court);
+    }
 }

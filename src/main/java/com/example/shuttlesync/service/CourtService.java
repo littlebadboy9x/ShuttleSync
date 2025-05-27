@@ -21,4 +21,6 @@ public interface CourtService {
     List<Court> getCourtsWithFixedTimeSlots();
 
     List<Court> getCourtsWithoutFixedTimeSlots();
+
+    Court toggleCourtStatus(Integer id);
 }
