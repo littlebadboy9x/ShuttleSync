@@ -96,7 +96,7 @@ export default function AdminDashboard() {
             
             // Fetch bookings
             console.log("Đang gọi API bookings...");
-            const bookingsResponse = await fetch('http://localhost:8080/api/admin/bookings', {
+            const bookingsResponse = await fetch('http://localhost:8080/api/bookings/recent', {
                 headers: authHeader
             });
             console.log("Status API bookings:", bookingsResponse.status);
