@@ -1,4 +1,4 @@
-// File: C:\GitHub\ShuttleSync\app\admin\courts\page.tsx
+// File: D:\FPT Polytechnic\ThucTap\app\admin\courts\page.tsx
 import * as entry from '../../../../../app/admin/courts/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

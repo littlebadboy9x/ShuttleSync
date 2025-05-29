@@ -32,14 +32,14 @@ public class TimeSlot {
 
     @Column(name = "EndTime", nullable = false)
     private LocalTime endTime;
-    
+
     @ManyToOne
     @JoinColumn(name = "Status", nullable = false)
     private StatusType status;
-    
+
     @Column(name = "Price")
     private BigDecimal price;
-    
+
     @Column(name = "EffectiveDate")
     private LocalDate effectiveDate;
 }
