@@ -8,6 +8,8 @@ import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Calendar, History, Home, LogOut, Menu, User, X } from "lucide-react"
+import { CreditCard } from 'lucide-react';
+import { Store } from 'lucide-react';
 
 export function CustomerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -18,6 +20,8 @@ export function CustomerLayout({ children }: { children: React.ReactNode }) {
     { name: "Đặt Sân", href: "/customer/booking", icon: Calendar },
     { name: "Lịch Sử Đặt Sân", href: "/customer/bookings", icon: History },
     { name: "Hồ Sơ", href: "/customer/profile", icon: User },
+    { name: "Dịch Vụ", href: "/customer/services", icon: Store},
+    { name: "Hóa Đơn", href: "/customer/invoices", icon: CreditCard},
   ]
 
   return (

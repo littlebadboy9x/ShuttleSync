@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -19,56 +19,138 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AdminLayout } from "@/components/admin-layout"
 import { Plus } from "lucide-react"
+import axios from "axios"
+import { format, parseISO } from "date-fns"
+import { vi } from "date-fns/locale"
 
-// Dữ liệu mẫu cho người dùng
-const users = [
-    {
-        id: 1,
-        fullName: "Nguyễn Văn A",
-        email: "nguyenvana@example.com",
-        role: "customer",
-        createdAt: "2023-01-15",
-    },
-    {
-        id: 2,
-        fullName: "Trần Thị B",
-        email: "tranthib@example.com",
-        role: "customer",
-        createdAt: "2023-02-20",
-    },
-    {
-        id: 3,
-        fullName: "Admin",
-        email: "admin@example.com",
-        role: "admin",
-        createdAt: "2023-01-01",
-    },
-    {
-        id: 4,
-        fullName: "Lê Văn C",
-        email: "levanc@example.com",
-        role: "customer",
-        createdAt: "2023-03-10",
-    },
-    {
-        id: 5,
-        fullName: "Phạm Thị D",
-        email: "phamthid@example.com",
-        role: "customer",
-        createdAt: "2023-04-05",
-    },
-]
+interface User {
+    id: number;
+    fullName: string;
+    email: string;
+    role: string;
+    createdAt: string;
+}
+
+const API_URL = 'http://localhost:8080/api/users';
+
+const getAuthHeader = () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return {};
+    
+    const user = JSON.parse(userStr);
+    return {
+        headers: {
+            'Authorization': `Bearer ${user.token}`
+        }
+    };
+};
+
+// Hàm format ngày giờ
+const formatDateTime = (dateStr: string) => {
+    try {
+        // Xử lý chuỗi ngày không hợp lệ
+        if (dateStr.includes(',')) {
+            const [year, month, day, hour, minute, second] = dateStr.split(',').map(Number)
+            const date = new Date(year, month - 1, day, hour, minute, second)
+            return format(date, "dd/MM/yyyy", { locale: vi })
+        }
+        
+        // Xử lý chuỗi ngày ISO
+        const date = parseISO(dateStr)
+        return format(date, "dd/MM/yyyy", { locale: vi })
+    } catch (error) {
+        console.error("Error formatting date:", error)
+        return dateStr // Trả về chuỗi gốc nếu không parse được
+    }
+}
 
 export default function UsersPage() {
+    const [users, setUsers] = useState<User[]>([])
     const [searchQuery, setSearchQuery] = useState("")
     const [roleFilter, setRoleFilter] = useState("all")
     const [isAddUserOpen, setIsAddUserOpen] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [newUser, setNewUser] = useState({
         fullName: "",
         email: "",
         password: "",
         role: "customer",
     })
+
+    useEffect(() => {
+        loadUsers()
+    }, [])
+
+    const loadUsers = async () => {
+        try {
+            setIsLoading(true)
+            setError(null)
+            const response = await axios.get<User[]>(API_URL, getAuthHeader())
+            
+            if (!response.data) {
+                console.error('No data received from API')
+                setError("Không thể tải dữ liệu người dùng")
+                return
+            }
+
+            const usersData = Array.isArray(response.data) ? response.data : [response.data]
+            
+            // Validate và format dữ liệu
+            const validUsers = usersData.map(user => ({
+                id: Number(user.id) || 0,
+                fullName: String(user.fullName || ''),
+                email: String(user.email || ''),
+                role: String(user.role || 'customer'),
+                createdAt: String(user.createdAt || new Date().toISOString())
+            }))
+
+            setUsers(validUsers)
+        } catch (error: any) {
+            console.error("Error loading users:", error)
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                localStorage.removeItem('user')
+                window.location.href = '/login'
+            }
+            setError("Có lỗi xảy ra khi tải dữ liệu")
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    const handleAddUser = async () => {
+        try {
+            const apiResponse = await axios.post<User>(API_URL, newUser, getAuthHeader())
+            if (apiResponse.data) {
+                const newUserData: User = {
+                    id: Number(apiResponse.data.id),
+                    fullName: String(apiResponse.data.fullName),
+                    email: String(apiResponse.data.email),
+                    role: String(apiResponse.data.role),
+                    createdAt: String(apiResponse.data.createdAt)
+                }
+                setUsers([...users, newUserData])
+                setNewUser({
+                    fullName: "",
+                    email: "",
+                    password: "",
+                    role: "customer",
+                })
+                setIsAddUserOpen(false)
+            }
+        } catch (error) {
+            console.error("Error adding user:", error)
+        }
+    }
+
+    const handleDeleteUser = async (userId: number) => {
+        try {
+            await axios.delete(`${API_URL}/${userId}`, getAuthHeader())
+            setUsers(users.filter(user => user.id !== userId))
+        } catch (error) {
+            console.error("Error deleting user:", error)
+        }
+    }
 
     // Lọc người dùng dựa trên truy vấn tìm kiếm và bộ lọc vai trò
     const filteredUsers = users.filter((user) => {
@@ -80,17 +162,6 @@ export default function UsersPage() {
 
         return matchesSearch && matchesRole
     })
-
-    const handleAddUser = () => {
-        console.log("Thêm người dùng mới:", newUser)
-        setNewUser({
-            fullName: "",
-            email: "",
-            password: "",
-            role: "customer",
-        })
-        setIsAddUserOpen(false)
-    }
 
     // Ánh xạ vai trò sang tiếng Việt
     const getRoleText = (role: string) => {
@@ -214,27 +285,46 @@ export default function UsersPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredUsers.map((user) => (
-                                        <TableRow key={user.id}>
-                                            <TableCell className="font-medium">#{user.id}</TableCell>
-                                            <TableCell>{user.fullName}</TableCell>
-                                            <TableCell>{user.email}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={user.role === "admin" ? "default" : "outline"}>{getRoleText(user.role)}</Badge>
-                                            </TableCell>
-                                            <TableCell>{user.createdAt}</TableCell>
-                                            <TableCell>
-                                                <div className="flex space-x-2">
-                                                    <Button variant="outline" size="sm">
-                                                        Sửa
-                                                    </Button>
-                                                    <Button variant="destructive" size="sm">
-                                                        Xóa
-                                                    </Button>
-                                                </div>
+                                    {isLoading ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center">
+                                                Đang tải dữ liệu...
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                    ) : error ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center text-red-500">
+                                                {error}
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : filteredUsers.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center">
+                                                Không tìm thấy người dùng nào
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        filteredUsers.map((user) => (
+                                            <TableRow key={user.id}>
+                                                <TableCell className="font-medium">#{user.id}</TableCell>
+                                                <TableCell>{user.fullName}</TableCell>
+                                                <TableCell>{user.email}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={user.role === "admin" ? "default" : "outline"}>
+                                                        {getRoleText(user.role)}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>{formatDateTime(user.createdAt)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex space-x-2">
+                                                        <Button variant="outline" size="sm">
+                                                            Sửa
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
                                 </TableBody>
                             </Table>
                         </div>
