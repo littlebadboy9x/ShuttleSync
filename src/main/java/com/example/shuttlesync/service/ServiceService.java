@@ -1,9 +1,9 @@
 package com.example.shuttlesync.service;
 
+import com.example.shuttlesync.dto.ServiceDTO;
 import com.example.shuttlesync.model.Service;
 import com.example.shuttlesync.model.ServiceType;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,9 +17,9 @@ public interface ServiceService {
     
     List<Service> getActiveServices();
     
-    Service createService(Integer typeId, String name, String description, BigDecimal unitPrice);
-    
-    Service updateService(Integer id, String name, String description, BigDecimal unitPrice);
+    Service createService(ServiceDTO request);
+
+    Service updateService(Integer id, ServiceDTO request);
     
     Service updateServiceStatus(Integer id, Boolean isActive);
     
