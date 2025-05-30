@@ -65,7 +65,7 @@ export default function LoginPage() {
       if (data.role === "admin") {
         router.push("/admin/dashboard")
       } else {
-        router.push("/customer/booking")
+        router.push("/customer/dashboard")
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Đăng nhập thất bại")
