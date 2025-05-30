@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 import java.math.BigDecimal;
 
@@ -20,6 +21,7 @@ public class Service {
 
     @ManyToOne
     @JoinColumn(name = "ServiceTypeId")
+    @JsonBackReference
     private ServiceType serviceType;
 
     @Column(name = "ServiceName", nullable = false, length = 100)
