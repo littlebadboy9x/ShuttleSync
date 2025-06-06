@@ -1,11 +1,11 @@
 package com.example.shuttlesync.dto;
 
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -13,19 +13,21 @@ import lombok.NoArgsConstructor;
 public class UserDto {
 
     private Integer id;
-
-    @NotBlank
-    @Size(max = 100)
+    
     private String fullName;
-
-    @NotBlank
-    @Size(max = 100)
+    
     @Email
     private String email;
-
-    @NotBlank
-    @Size(min = 6, max = 40)
+    
+    private String phone;
+    
     private String password;
-
-    private String role = "customer"; // Mặc định là customer
+    
+    private String role;
+    
+    private Boolean isActive;
+    
+    private LocalDateTime createdAt;
+    
+    private LocalDateTime updatedAt;
 }

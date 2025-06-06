@@ -100,7 +100,8 @@ public class CourtsController {
             return ResponseEntity.ok(timeSlots);
         } catch (Exception e) {
             logger.severe("Error fetching time slots for court " + id + ": " + e.getMessage());
-            throw e;
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
         }
     }
 

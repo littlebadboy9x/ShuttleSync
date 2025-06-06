@@ -37,6 +37,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingStatusTypeRepository bookingStatusTypeRepository;
     private final NotificationRepository notificationRepository;
     private final SystemChangeLogRepository systemChangeLogRepository;
+    private final PaymentStatusTypeRepository paymentStatusTypeRepository;
     
     @Override
     public List<Booking> getAllBookings() {
@@ -171,16 +172,18 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(newStatus);
         Booking updatedBooking = bookingRepository.save(booking);
         
-        // Ghi log thay đổi
-        SystemChangeLog log = new SystemChangeLog();
-        log.setTableName("Bookings");
-        log.setRecordId(bookingId);
-        log.setChangeType("UPDATE");
-        log.setChangedFields(String.format(
-                "{\"Status\":{\"from\":\"%d\",\"to\":\"%d\"}}",
-                oldStatus.getId(), newStatusId));
-        log.setChangedBy(changedBy);
-        systemChangeLogRepository.save(log);
+        // Ghi log thay đổi nếu có thông tin người thay đổi
+        if (changedBy != null) {
+            SystemChangeLog log = new SystemChangeLog();
+            log.setTableName("Bookings");
+            log.setRecordId(bookingId);
+            log.setChangeType("UPDATE");
+            log.setChangedFields(String.format(
+                    "{\"Status\":{\"from\":\"%d\",\"to\":\"%d\"}}",
+                    oldStatus.getId(), newStatusId));
+            log.setChangedBy(changedBy);
+            systemChangeLogRepository.save(log);
+        }
         
         // Tạo thanh toán nếu trạng thái là "Đã xác nhận" (ID = 2)
         if (newStatusId == 2 && !oldStatus.getId().equals(newStatusId)) {
@@ -188,7 +191,12 @@ public class BookingServiceImpl implements BookingService {
             payment.setBooking(booking);
             payment.setAmount(booking.getTimeSlot().getPrice());
             payment.setPaymentMethod("Chưa chọn");
-            payment.setPaymentStatus(new PaymentStatusType((byte)1, "Chưa thanh toán", null)); // ID = 1 cho "Chưa thanh toán"
+            
+            // Lấy trạng thái thanh toán từ repository thay vì tạo mới
+            PaymentStatusType pendingStatus = paymentStatusTypeRepository.findById((byte)1)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái thanh toán 'Chưa thanh toán'"));
+            payment.setPaymentStatus(pendingStatus);
+            
             payment.setCreatedAt(LocalDateTime.now());
             paymentRepository.save(payment);
             
@@ -280,19 +288,38 @@ public class BookingServiceImpl implements BookingService {
         
         // Áp dụng giảm giá nếu có
         if (booking.getDiscounts() != null && !booking.getDiscounts().isEmpty()) {
-            BigDecimal discountPercent = BigDecimal.ZERO;
+            BigDecimal totalDiscountAmount = BigDecimal.ZERO;
+            
             for (Discount discount : booking.getDiscounts()) {
-                discountPercent = discountPercent.add(new BigDecimal(discount.getDiscountPercent()));
+                // Kiểm tra voucher có hợp lệ không
+                if (discount.getStatus() != Discount.DiscountStatus.ACTIVE) {
+                    continue;
+                }
+                
+                BigDecimal discountAmount = BigDecimal.ZERO;
+                
+                if (discount.getType() == Discount.DiscountType.PERCENTAGE) {
+                    // Giảm giá theo phần trăm
+                    discountAmount = amount.multiply(discount.getValue()).divide(new BigDecimal(100), 2, BigDecimal.ROUND_HALF_UP);
+                    
+                    // Áp dụng giới hạn giảm tối đa nếu có
+                    if (discount.getMaxDiscountAmount() != null && discountAmount.compareTo(discount.getMaxDiscountAmount()) > 0) {
+                        discountAmount = discount.getMaxDiscountAmount();
+            }
+                } else if (discount.getType() == Discount.DiscountType.FIXED) {
+                    // Giảm giá cố định
+                    discountAmount = discount.getValue();
+                }
+                
+                totalDiscountAmount = totalDiscountAmount.add(discountAmount);
             }
             
-            // Tổng giảm giá tối đa 100%
-            if (discountPercent.compareTo(new BigDecimal(100)) > 0) {
-                discountPercent = new BigDecimal(100);
+            // Giảm giá không thể vượt quá số tiền gốc
+            if (totalDiscountAmount.compareTo(amount) > 0) {
+                totalDiscountAmount = amount;
             }
             
-            // Tính số tiền giảm
-            BigDecimal discountAmount = amount.multiply(discountPercent).divide(new BigDecimal(100));
-            amount = amount.subtract(discountAmount);
+            amount = amount.subtract(totalDiscountAmount);
         }
         
         // Tạo payment mới
@@ -369,12 +396,31 @@ public class BookingServiceImpl implements BookingService {
     
     @Override
     public boolean isTimeSlotBooked(Integer courtId, Integer timeSlotId, LocalDate date) {
-        return bookingRepository.existsByCourtIdAndTimeSlotIdAndBookingDateAndStatusIdNot(
-            courtId, 
-            timeSlotId, 
-            date,
-            (byte)3 // ID cho trạng thái "Đã hủy"
-        );
+        try {
+            // Kiểm tra nếu court không tồn tại
+            if (!courtRepository.existsById(courtId)) {
+                throw new ResourceNotFoundException("Không tìm thấy sân với ID: " + courtId);
+            }
+            
+            // Kiểm tra nếu timeSlot không tồn tại
+            if (!timeSlotRepository.existsById(timeSlotId)) {
+                throw new ResourceNotFoundException("Không tìm thấy khung giờ với ID: " + timeSlotId);
+            }
+            
+            return bookingRepository.existsByCourtIdAndTimeSlotIdAndBookingDateAndStatusIdNot(
+                courtId, 
+                timeSlotId, 
+                date,
+                (byte)3 // ID cho trạng thái "Đã hủy"
+            );
+        } catch (ResourceNotFoundException e) {
+            // Log và rethrow cho loại lỗi này để client xử lý
+            throw e;
+        } catch (Exception e) {
+            // Log lỗi bất ngờ
+            e.printStackTrace();
+            return false; // Trả về false để an toàn (không cho đặt nếu có lỗi)
+        }
     }
 
     @Override
@@ -414,6 +460,11 @@ public class BookingServiceImpl implements BookingService {
                 .limit(10)
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public Booking saveBooking(Booking booking) {
+        return bookingRepository.save(booking);
     }
 
     private BookingDTO convertToDTO(Booking booking) {

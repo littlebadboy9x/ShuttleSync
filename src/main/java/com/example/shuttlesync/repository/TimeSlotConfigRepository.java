@@ -12,9 +12,9 @@ import java.util.Optional;
 @Repository
 public interface TimeSlotConfigRepository extends JpaRepository<TimeSlotConfig, Integer> {
     
-    @Query("SELECT t FROM TimeSlotConfig t WHERE t.isActive = true")
-    Optional<TimeSlotConfig> findActiveConfig();
-    
-    @Query("SELECT t FROM TimeSlotConfig t WHERE :date BETWEEN t.effectiveFrom AND COALESCE(t.effectiveTo, '9999-12-31') ORDER BY t.effectiveFrom DESC")
-    Optional<TimeSlotConfig> findConfigForDate(@Param("date") LocalDate date);
+    @Query("SELECT t FROM TimeSlotConfig t WHERE " +
+           "(t.effectiveFrom <= :date AND t.effectiveTo >= :date) OR " +
+           "(t.effectiveFrom <= :date AND t.effectiveTo IS NULL) " +
+           "ORDER BY t.effectiveFrom DESC")
+    Optional<TimeSlotConfig> findActiveConfigForDate(@Param("date") LocalDate date);
 } 

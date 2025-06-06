@@ -1,9 +1,7 @@
 package com.example.shuttlesync.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -13,13 +11,15 @@ import java.util.Set;
 
 @Entity
 @Table(name = "Invoices")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Invoice {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "Id")
     private Integer id;
 
     @OneToOne
@@ -51,9 +51,11 @@ public class Invoice {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
     private Set<InvoiceDetail> invoiceDetails = new HashSet<>();
 
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
     private Set<Payment> payments = new HashSet<>();
 
     @PrePersist

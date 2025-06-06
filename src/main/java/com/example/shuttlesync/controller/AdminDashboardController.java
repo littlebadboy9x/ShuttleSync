@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("/admin")
 @RequiredArgsConstructor
 public class AdminDashboardController {
 
@@ -87,16 +87,5 @@ public class AdminDashboardController {
         stats.setTotalRevenue(paymentService.getTotalPaidAmount());
 
         return ResponseEntity.ok(stats);
-    }
-
-    @PostMapping("/bookings/{id}/confirm")
-    public ResponseEntity<Booking> confirmBooking(@PathVariable Integer id) {
-        // Lấy user admin từ security context
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        User admin = userService.getUserByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Admin user not found"));
-        
-        Booking confirmedBooking = bookingService.updateBookingStatus(id, (byte)2, admin);
-        return ResponseEntity.ok(confirmedBooking);
     }
 } 

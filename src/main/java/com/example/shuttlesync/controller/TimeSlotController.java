@@ -16,7 +16,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping("/time-slot")
+@RequestMapping("/time-slots")
 @CrossOrigin(origins = "http://localhost:3000")
 public class TimeSlotController {
 
@@ -35,8 +35,13 @@ public class TimeSlotController {
     //Lấy tất cả các khung giờ
     @GetMapping("/court/{courtId}")
     public ResponseEntity<List<TimeSlot>> getAllTimeSlotsByCourt(@PathVariable Integer courtId) {
-        List<TimeSlot> timeSlots = timeSlotService.getAllTimeSlotsByCourt(courtId);
-        return ResponseEntity.ok(timeSlots);
+        try {
+            List<TimeSlot> timeSlots = timeSlotService.getAllTimeSlotsByCourt(courtId);
+            return ResponseEntity.ok(timeSlots);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 
     //danh sách slot còn trống theo ngày
@@ -44,8 +49,13 @@ public class TimeSlotController {
     public ResponseEntity<List<TimeSlot>> getAvailableTimeSlots(
             @RequestParam Integer courtId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        List<TimeSlot> availableSlots = timeSlotService.getAvailableTimeSlots(courtId, date);
-        return ResponseEntity.ok(availableSlots);
+        try {
+            List<TimeSlot> availableSlots = timeSlotService.getAvailableTimeSlots(courtId, date);
+            return ResponseEntity.ok(availableSlots);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 
     //Cập nhật giá cho 1 slot theo ngày
@@ -54,26 +64,41 @@ public class TimeSlotController {
             @PathVariable Integer courtId,
             @PathVariable Integer slotIndex,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        timeSlotService.updateSlotPrice(courtId, slotIndex, date);
-        return ResponseEntity.ok().body("Price updated successfully");
+        try {
+            timeSlotService.updateSlotPrice(courtId, slotIndex, date);
+            return ResponseEntity.ok().body("Price updated successfully");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 
     //Xác định loại ngày
     @GetMapping("/day-type")
     public ResponseEntity<String> getDayType(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        String dayType = timeSlotService.getDayType(date);
-        return ResponseEntity.ok(dayType);
+        try {
+            String dayType = timeSlotService.getDayType(date);
+            return ResponseEntity.ok(dayType);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @PostMapping("/generate")
     public ResponseEntity<String> generateTimeSlots(
             @RequestBody TimeSlotConfig config,
             @RequestParam Integer adminId) {
-        User admin = userService.getUserById(adminId)
-                .orElseThrow(() -> new RuntimeException("Admin not found with ID: " + adminId));;
-        timeSlotService.generateTimeSlots(config, admin);
-        return ResponseEntity.status(HttpStatus.CREATED).body("Time slots generated successfully.");
+        try {
+            User admin = userService.getUserById(adminId)
+                    .orElseThrow(() -> new RuntimeException("Admin not found with ID: " + adminId));;
+            timeSlotService.generateTimeSlots(config, admin);
+            return ResponseEntity.status(HttpStatus.CREATED).body("Time slots generated successfully.");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 
 //    @PostMapping("/check-availability")

@@ -60,6 +60,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(request -> "OPTIONS".equals(request.getMethod())).permitAll()
                         .requestMatchers(new AntPathRequestMatcher("/auth/**")).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/api/momo/callback")).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/api/momo/return")).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/api/admin/vouchers/**")).hasRole("ADMIN")
                         .requestMatchers(new AntPathRequestMatcher("/api/admin/**")).hasRole("ADMIN")
                         .requestMatchers(new AntPathRequestMatcher("/api/customer/**")).hasRole("CUSTOMER")
                         .requestMatchers(new AntPathRequestMatcher("/api/bookings/**")).hasRole("ADMIN")

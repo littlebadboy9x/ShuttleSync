@@ -5,132 +5,206 @@ import { AdminLayout } from "@/components/admin-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
+  Plus, 
   Search, 
-  Eye, 
-  Download, 
+  Edit, 
+  Trash2, 
   RefreshCw, 
   Filter, 
   ArrowUpDown,
-  Receipt,
-  CalendarDays,
-  DollarSign,
   FileText,
+  DollarSign,
+  Eye,
+  Download,
+  Printer,
+  Calendar,
+  User,
   CheckCircle,
-  AlertCircle,
-  Clock
+  XCircle,
+  Clock,
+  TrendingUp
 } from "lucide-react"
 import { format } from "date-fns"
 import { vi } from "date-fns/locale"
+import axios from "axios"
+import { toast } from "@/components/ui/use-toast"
+import Image from "next/image"
+
+interface InvoiceDetail {
+  id: number
+  itemName: string
+  bookingDate?: string
+  startTime?: string
+  endTime?: string
+  courtName?: string
+  quantity: number
+  unitPrice: number
+  amount: number
+  notes?: string
+}
 
 interface Invoice {
   id: number
-  invoiceNumber: string
-  customerName: string
   bookingId: number
-  courtName: string
-  amount: number
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  invoiceDate: string
+  originalAmount: number
+  discountAmount: number
+  finalAmount: number
   status: string
+  notes?: string
   createdAt: string
-  paidAt?: string
-  paymentMethod?: string
+  updatedAt: string
+  details: InvoiceDetail[]
 }
+
+interface InvoiceStats {
+  totalInvoices: number
+  paidInvoices: number
+  pendingInvoices: number
+  totalRevenue: number
+  avgInvoiceValue: number
+}
+
+interface MomoCreatePaymentResponse {
+  payUrl: string;
+  orderId: string;
+  requestId: string;
+  message: string;
+  resultCode: string;
+}
+
+interface MomoPaymentStatusResponse {
+  orderId: string;
+  status: string;
+  message: string;
+  transactionId: string | null;
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL + '/admin/invoices';
+
+const getAuthHeader = () => {
+  const userStr = localStorage.getItem('user');
+  if (!userStr) return {};
+  
+  const user = JSON.parse(userStr);
+  return {
+    headers: {
+      'Authorization': `Bearer ${user.token}`
+    }
+  };
+};
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [stats, setStats] = useState<InvoiceStats>({
+    totalInvoices: 0,
+    paidInvoices: 0,
+    pendingInvoices: 0,
+    totalRevenue: 0,
+    avgInvoiceValue: 0
+  })
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [currentInvoice, setCurrentInvoice] = useState<Invoice | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" })
+  const [dateFilter, setDateFilter] = useState("all")
+  const [sortConfig, setSortConfig] = useState({ key: "invoiceDate", direction: "desc" })
+  const [error, setError] = useState<string | null>(null)
 
-  // Mock data để hiển thị UI
-  const mockInvoices: Invoice[] = [
-    {
-      id: 1,
-      invoiceNumber: "INV-2023-001",
-      customerName: "Nguyễn Văn A",
-      bookingId: 101,
-      courtName: "Sân 01",
-      amount: 150000,
-      status: "paid",
-      createdAt: "2023-10-15T08:30:00",
-      paidAt: "2023-10-15T09:15:00",
-      paymentMethod: "MoMo"
-    },
-    {
-      id: 2,
-      invoiceNumber: "INV-2023-002",
-      customerName: "Trần Thị B",
-      bookingId: 102,
-      courtName: "Sân 03",
-      amount: 200000,
-      status: "pending",
-      createdAt: "2023-10-16T10:00:00"
-    },
-    {
-      id: 3,
-      invoiceNumber: "INV-2023-003",
-      customerName: "Lê Văn C",
-      bookingId: 103,
-      courtName: "Sân 02",
-      amount: 180000,
-      status: "paid",
-      createdAt: "2023-10-16T14:45:00",
-      paidAt: "2023-10-16T15:30:00",
-      paymentMethod: "VNPAY"
-    },
-    {
-      id: 4,
-      invoiceNumber: "INV-2023-004",
-      customerName: "Phạm Thị D",
-      bookingId: 104,
-      courtName: "Sân 04",
-      amount: 250000,
-      status: "cancelled",
-      createdAt: "2023-10-17T09:15:00"
-    },
-    {
-      id: 5,
-      invoiceNumber: "INV-2023-005",
-      customerName: "Hoàng Văn E",
-      bookingId: 105,
-      courtName: "Sân 01",
-      amount: 150000,
-      status: "paid",
-      createdAt: "2023-10-17T16:00:00",
-      paidAt: "2023-10-17T16:45:00",
-      paymentMethod: "Tiền mặt"
-    }
-  ]
+  const [formData, setFormData] = useState({
+    bookingId: 0,
+    discountAmount: 0,
+    notes: "",
+    status: "Pending"
+  })
+
+  const [momoPaymentStatus, setMomoPaymentStatus] = useState<{
+    orderId: string;
+    invoiceId: number;
+  } | null>(null);
 
   useEffect(() => {
-    // Mô phỏng việc tải dữ liệu từ API
-    const fetchInvoices = () => {
-      setIsLoading(true)
-      setTimeout(() => {
-        setInvoices(mockInvoices)
-        setIsLoading(false)
-      }, 1000)
-    }
-
-    fetchInvoices()
+    loadInvoices()
   }, [])
+
+  const loadInvoices = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (dateFilter !== "all") params.append("dateFilter", dateFilter);
+      
+      console.log(`Fetching invoices with params: ${params.toString()}`);
+      const response = await axios.get(`${API_URL}?${params.toString()}`, getAuthHeader())
+      
+      console.log("API Response:", response);
+      console.log("Invoice data sample:", response.data && response.data.length > 0 ? response.data[0] : "No invoices");
+      
+      if (response.data && Array.isArray(response.data)) {
+        setInvoices(response.data)
+        
+        // Calculate statistics
+        const totalInvoices = response.data.length;
+        const paidInvoices = response.data.filter((inv: Invoice) => inv.status === 'Paid').length;
+        const pendingInvoices = response.data.filter((inv: Invoice) => inv.status === 'Pending').length;
+        const totalRevenue = response.data
+          .filter((inv: Invoice) => inv.status === 'Paid')
+          .reduce((sum: number, inv: Invoice) => sum + inv.finalAmount, 0);
+        const avgInvoiceValue = totalInvoices > 0 ? totalRevenue / totalInvoices : 0;
+        
+        setStats({
+          totalInvoices,
+          paidInvoices,
+          pendingInvoices,
+          totalRevenue,
+          avgInvoiceValue
+        });
+      } else {
+        console.log("Response data is not an array:", response.data);
+        setInvoices([])
+      }
+    } catch (error: any) {
+      console.error("Error loading invoices:", error)
+      console.error("Error details:", error.response?.data || "No error details");
+      
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+      }
+      setError("Có lỗi xảy ra khi tải dữ liệu")
+      setInvoices([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleRefresh = () => {
     setIsRefreshing(true)
-    // Mô phỏng việc làm mới dữ liệu
-    setTimeout(() => {
-      setInvoices(mockInvoices)
-      setIsRefreshing(false)
-    }, 1000)
+    loadInvoices().finally(() => setIsRefreshing(false))
   }
+
+  // Load data when filters change
+  useEffect(() => {
+    if (!isLoading) {
+      loadInvoices()
+    }
+  }, [statusFilter, dateFilter])
 
   const handleSort = (key: keyof Invoice) => {
     let direction = 'asc'
@@ -156,53 +230,300 @@ export default function InvoicesPage() {
   })
 
   const filteredInvoices = sortedInvoices.filter(invoice => {
-    const matchesSearch = invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || invoice.status === statusFilter
-    return matchesSearch && matchesStatus
+    const matchesSearch = invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          invoice.customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          invoice.id.toString().includes(searchTerm)
+    return matchesSearch
   })
 
-  const handleViewInvoice = (invoice: Invoice) => {
-    setCurrentInvoice(invoice)
+  const handleAdd = () => {
+    setCurrentInvoice(null)
+    setFormData({
+      bookingId: 0,
+      discountAmount: 0,
+      notes: "",
+      status: "Pending"
+    })
     setIsDialogOpen(true)
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-        return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Đã thanh toán
-          </Badge>
-        )
-      case "pending":
-        return (
-          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-            <Clock className="h-3 w-3 mr-1" />
-            Chờ thanh toán
-          </Badge>
-        )
-      case "cancelled":
-        return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Đã hủy
-          </Badge>
-        )
-      default:
-        return (
-          <Badge variant="outline">
-            Không xác định
-          </Badge>
-        )
+  const handleEdit = (invoice: Invoice) => {
+    setCurrentInvoice(invoice)
+    setFormData({
+      bookingId: invoice.bookingId,
+      discountAmount: invoice.discountAmount,
+      notes: invoice.notes || "",
+      status: invoice.status
+    })
+    setIsDialogOpen(true)
+  }
+
+  const handleView = async (invoice: Invoice) => {
+    try {
+      console.log("Fetching invoice details for ID:", invoice.id);
+      
+      const response = await axios.get(
+        `${API_URL}/${invoice.id}/details`,
+        getAuthHeader()
+      );
+      
+      console.log("Invoice details response:", response.data);
+      
+      if (response.data && response.data.success && response.data.invoice) {
+        setCurrentInvoice(response.data.invoice);
+        setIsViewDialogOpen(true);
+      } else {
+        console.error("Invalid response format:", response.data);
+        toast({
+          title: "Lỗi",
+          description: "Không thể tải thông tin chi tiết hóa đơn",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching invoice details:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể tải thông tin chi tiết hóa đơn",
+        variant: "destructive",
+      });
+      setCurrentInvoice(invoice);
+      setIsViewDialogOpen(true);
+    }
+  };
+
+  const handleSaveInvoice = async () => {
+    try {
+      if (!formData.bookingId) {
+        toast({
+          title: "Lỗi",
+          description: "Vui lòng chọn booking",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const requestData = {
+        bookingId: formData.bookingId,
+        discountAmount: formData.discountAmount,
+        notes: formData.notes,
+        status: formData.status
+      }
+
+      if (currentInvoice) {
+        // Update
+        await axios.put(`${API_URL}/${currentInvoice.id}`, requestData, getAuthHeader())
+        toast({
+          title: "Thành công",
+          description: "Đã cập nhật hóa đơn thành công",
+        })
+      } else {
+        // Create
+        await axios.post(`${API_URL}`, requestData, getAuthHeader())
+        toast({
+          title: "Thành công",
+          description: "Đã tạo hóa đơn mới thành công",
+        })
+      }
+
+      setIsDialogOpen(false)
+      loadInvoices()
+    } catch (error) {
+      console.error("Error saving invoice:", error)
+      toast({
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi lưu hóa đơn",
+        variant: "destructive",
+      })
     }
   }
 
-  // Tính tổng doanh thu
-  const totalRevenue = filteredInvoices
-    .filter(invoice => invoice.status === "paid")
-    .reduce((sum, invoice) => sum + invoice.amount, 0)
+  const handleUpdateStatus = async (invoiceId: number, status: string) => {
+    try {
+      const response = await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/invoices/${invoiceId}/status`,
+        { status },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader().headers
+          },
+          withCredentials: true
+        }
+      );
+
+      if (response.status === 200) {
+        return true;
+      }
+      throw new Error('Failed to update status');
+    } catch (error: any) {
+      console.error('Error updating invoice status:', error);
+      throw error;
+    }
+  };
+
+  const handlePrintInvoice = (invoice: Invoice) => {
+    // Implement print functionality
+    window.print()
+  }
+
+  const handleExportInvoice = async (invoice: Invoice) => {
+    try {
+      const response = await axios.get(`${API_URL}/${invoice.id}/export`, {
+        ...getAuthHeader(),
+        responseType: 'blob'
+      });
+      
+      // Sử dụng type assertion để đảm bảo TypeScript hiểu đây là Blob
+      const data = response.data as Blob;
+      const url = window.URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${invoice.id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting invoice:", error);
+      toast({
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi xuất hóa đơn",
+        variant: "destructive",
+      });
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "Paid": return "bg-green-100 text-green-800 border-green-200"
+      case "Pending": return "bg-yellow-100 text-yellow-800 border-yellow-200"
+      case "Cancelled": return "bg-red-100 text-red-800 border-red-200"
+      default: return "bg-gray-100 text-gray-800 border-gray-200"
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "Paid": return "Đã thanh toán"
+      case "Pending": return "Chờ thanh toán"
+      case "Cancelled": return "Đã hủy"
+      default: return status
+    }
+  }
+
+  const handlePaymentCash = async (invoice: Invoice) => {
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/bookings/${invoice.bookingId}/payments/cash`,
+        {
+          amount: invoice.finalAmount,
+          notes: "Thanh toán tiền mặt"
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader().headers
+          },
+          withCredentials: true
+        }
+      );
+
+      if (response.data.success) {
+        toast({
+          title: "Thành công",
+          description: "Đã xử lý thanh toán tiền mặt thành công",
+        });
+        setIsViewDialogOpen(false);
+        loadInvoices();
+      } else {
+        throw new Error(response.data.message || "Có lỗi xảy ra khi xử lý thanh toán");
+      }
+    } catch (error: any) {
+      console.error("Error processing cash payment:", error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || "Có lỗi xảy ra khi xử lý thanh toán",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePaymentMomo = async (invoice: Invoice) => {
+    try {
+      const response = await axios.post<MomoCreatePaymentResponse>(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/payments/momo/create`,
+        { invoiceId: invoice.id },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader().headers
+          },
+          withCredentials: true
+        }
+      );
+
+      if (response.data.resultCode === "0") {
+        // Mở URL thanh toán MoMo trong cửa sổ mới
+        window.open(response.data.payUrl, "_blank");
+
+        // Bắt đầu kiểm tra trạng thái thanh toán
+        const checkPaymentStatus = async () => {
+          try {
+            const statusResponse = await axios.get<MomoPaymentStatusResponse>(
+              `${process.env.NEXT_PUBLIC_API_URL}/admin/payments/momo/status/${response.data.orderId}`,
+              { 
+                headers: getAuthHeader().headers,
+                withCredentials: true 
+              }
+            );
+
+            if (statusResponse.data.status === "SUCCESS") {
+              await handleUpdateStatus(invoice.id, "Paid");
+              toast({
+                title: "Thành công",
+                description: "Thanh toán MoMo đã hoàn tất",
+              });
+              setIsViewDialogOpen(false);
+              loadInvoices();
+              return true;
+            }
+            return false;
+          } catch (error) {
+            console.error("Error checking payment status:", error);
+            return false;
+          }
+        };
+
+        // Kiểm tra trạng thái mỗi 5 giây
+        const intervalId = setInterval(async () => {
+          const isCompleted = await checkPaymentStatus();
+          if (isCompleted) {
+            clearInterval(intervalId);
+          }
+        }, 5000);
+
+        // Dừng kiểm tra sau 5 phút
+        setTimeout(() => {
+          clearInterval(intervalId);
+        }, 5 * 60 * 1000);
+
+        toast({
+          title: "Đã tạo thanh toán",
+          description: "Vui lòng hoàn tất thanh toán trên MoMo",
+        });
+      } else {
+        throw new Error(response.data.message);
+      }
+    } catch (error: any) {
+      console.error("Error creating MoMo payment:", error);
+      toast({
+        title: "Lỗi",
+        description: error.response?.data?.message || "Có lỗi xảy ra khi tạo thanh toán MoMo",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <AdminLayout>
@@ -215,10 +536,10 @@ export default function InvoicesPage() {
                 Quản Lý Hóa Đơn
               </h1>
               <p className="text-slate-600 text-lg">
-                Theo dõi và quản lý hóa đơn thanh toán
+                Quản lý hóa đơn đặt sân và dịch vụ
               </p>
             </div>
-            <div className="mt-4 sm:mt-0">
+            <div className="mt-4 sm:mt-0 flex space-x-3">
               <Button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
@@ -228,71 +549,94 @@ export default function InvoicesPage() {
                 <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                 {isRefreshing ? 'Đang tải...' : 'Làm mới'}
               </Button>
+              <Button
+                onClick={handleAdd}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Tạo Hóa Đơn
+              </Button>
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid gap-6 md:grid-cols-3 mb-8">
-            <Card className="group hover:shadow-2xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-600 mb-1">
-                      Tổng Hóa Đơn
-                    </p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                      {filteredInvoices.length}
-                    </h3>
-                    <div className="text-sm text-slate-500">
-                      {filteredInvoices.filter(i => i.status === "paid").length} đã thanh toán
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-blue-50 group-hover:scale-110 transition-transform duration-200">
-                    <Receipt className="h-6 w-6 text-blue-600" />
-                  </div>
-                </div>
+          {/* Statistics Cards */}
+          <div className="grid gap-6 md:grid-cols-5 mb-8">
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Tổng Hóa Đơn
+                </CardTitle>
+                <FileText className="h-4 w-4 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-900">{stats.totalInvoices}</div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Tất cả hóa đơn
+                </p>
               </CardContent>
             </Card>
-            
-            <Card className="group hover:shadow-2xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-600 mb-1">
-                      Doanh Thu
-                    </p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                      {totalRevenue.toLocaleString('vi-VN')} VNĐ
-                    </h3>
-                    <div className="text-sm text-slate-500">
-                      Từ {filteredInvoices.filter(i => i.status === "paid").length} hóa đơn đã thanh toán
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-green-50 group-hover:scale-110 transition-transform duration-200">
-                    <DollarSign className="h-6 w-6 text-green-600" />
-                  </div>
-                </div>
+
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Đã Thanh Toán
+                </CardTitle>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{stats.paidInvoices}</div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Hóa đơn đã thu tiền
+                </p>
               </CardContent>
             </Card>
-            
-            <Card className="group hover:shadow-2xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-600 mb-1">
-                      Chờ Thanh Toán
-                    </p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                      {filteredInvoices.filter(i => i.status === "pending").length}
-                    </h3>
-                    <div className="text-sm text-slate-500">
-                      {filteredInvoices.filter(i => i.status === "pending").reduce((sum, i) => sum + i.amount, 0).toLocaleString('vi-VN')} VNĐ
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-yellow-50 group-hover:scale-110 transition-transform duration-200">
-                    <Clock className="h-6 w-6 text-yellow-600" />
-                  </div>
+
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Chờ Thanh Toán
+                </CardTitle>
+                <Clock className="h-4 w-4 text-yellow-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">{stats.pendingInvoices}</div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Cần thu tiền
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Tổng Doanh Thu
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-emerald-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-emerald-600">
+                  {stats.totalRevenue.toLocaleString('vi-VN')} VNĐ
                 </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Từ hóa đơn đã thanh toán
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Giá Trị Trung Bình
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">
+                  {stats.avgInvoiceValue.toLocaleString('vi-VN')} VNĐ
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Giá trị hóa đơn trung bình
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -300,28 +644,46 @@ export default function InvoicesPage() {
           {/* Search and Filter */}
           <Card className="mb-8 border-0 shadow-lg bg-white/90 backdrop-blur-sm">
             <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
-                    placeholder="Tìm kiếm theo mã hóa đơn hoặc tên khách hàng..."
+                    placeholder="Tìm kiếm hóa đơn, khách hàng..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
-                <div className="w-full md:w-[200px]">
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
-                      <SelectValue placeholder="Lọc theo trạng thái" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                      <SelectItem value="paid">Đã thanh toán</SelectItem>
-                      <SelectItem value="pending">Chờ thanh toán</SelectItem>
-                      <SelectItem value="cancelled">Đã hủy</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="Paid">Đã thanh toán</SelectItem>
+                    <SelectItem value="Pending">Chờ thanh toán</SelectItem>
+                    <SelectItem value="Cancelled">Đã hủy</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="Lọc theo ngày" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả thời gian</SelectItem>
+                    <SelectItem value="today">Hôm nay</SelectItem>
+                    <SelectItem value="week">Tuần này</SelectItem>
+                    <SelectItem value="month">Tháng này</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <div className="flex items-center">
+                  <Filter className="h-4 w-4 text-slate-500 mr-2" />
+                  <span className="text-sm text-slate-600">
+                    {filteredInvoices.length} kết quả
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -337,14 +699,8 @@ export default function InvoicesPage() {
                     Danh Sách Hóa Đơn
                   </CardTitle>
                   <CardDescription className="text-slate-600 mt-1">
-                    Quản lý tất cả hóa đơn thanh toán
+                    Quản lý tất cả các hóa đơn đặt sân và dịch vụ
                   </CardDescription>
-                </div>
-                <div className="flex items-center mt-4 sm:mt-0">
-                  <Filter className="h-4 w-4 text-slate-500 mr-2" />
-                  <span className="text-sm text-slate-600">
-                    {filteredInvoices.length} hóa đơn
-                  </span>
                 </div>
               </div>
             </CardHeader>
@@ -353,23 +709,30 @@ export default function InvoicesPage() {
                 <Table>
                   <TableHeader className="bg-slate-50/50">
                     <TableRow className="border-slate-200">
+                      <TableHead className="w-16">STT</TableHead>
                       <TableHead className="font-semibold text-slate-700">
-                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('invoiceNumber')}>
-                          Mã hóa đơn
+                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('id')}>
+                          Mã HĐ
                           <ArrowUpDown className="ml-2 h-4 w-4" />
                         </div>
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700">Khách hàng</TableHead>
-                      <TableHead className="font-semibold text-slate-700">Sân</TableHead>
                       <TableHead className="font-semibold text-slate-700">
-                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('amount')}>
-                          Số tiền
+                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('invoiceDate')}>
+                          Ngày tạo
                           <ArrowUpDown className="ml-2 h-4 w-4" />
                         </div>
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700">
-                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('createdAt')}>
-                          Ngày tạo
+                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('originalAmount')}>
+                          Tổng tiền
+                          <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="font-semibold text-slate-700">Giảm giá</TableHead>
+                      <TableHead className="font-semibold text-slate-700">
+                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('finalAmount')}>
+                          Thành tiền
                           <ArrowUpDown className="ml-2 h-4 w-4" />
                         </div>
                       </TableHead>
@@ -380,18 +743,27 @@ export default function InvoicesPage() {
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-12">
+                        <TableCell colSpan={9} className="text-center py-12">
                           <div className="flex items-center justify-center">
                             <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
                             <span className="text-slate-600">Đang tải dữ liệu...</span>
                           </div>
                         </TableCell>
                       </TableRow>
+                    ) : error ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-12">
+                          <p className="text-red-600 mb-4">{error}</p>
+                          <Button onClick={loadInvoices} variant="outline">
+                            Thử lại
+                          </Button>
+                        </TableCell>
+                      </TableRow>
                     ) : filteredInvoices.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-12">
+                        <TableCell colSpan={9} className="text-center py-12">
                           <div className="text-slate-500">
-                            <Receipt className="h-12 w-12 mx-auto mb-4 text-slate-300" />
+                            <FileText className="h-12 w-12 mx-auto mb-4 text-slate-300" />
                             <p className="text-lg font-medium">Không có dữ liệu</p>
                             <p className="text-sm">Chưa có hóa đơn nào phù hợp với bộ lọc</p>
                           </div>
@@ -405,50 +777,68 @@ export default function InvoicesPage() {
                             index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
                           }`}
                         >
-                          <TableCell className="font-medium text-slate-900">
-                            <span className="px-2 py-1 bg-slate-100 rounded-md text-sm">
-                              {invoice.invoiceNumber}
-                            </span>
+                          <TableCell className="font-medium text-slate-600">
+                            {index + 1}
                           </TableCell>
-                          <TableCell className="font-medium text-slate-800">
-                            {invoice.customerName}
-                          </TableCell>
-                          <TableCell className="text-slate-700">
-                            {invoice.courtName}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center">
-                              <DollarSign className="h-4 w-4 text-green-600 mr-1" />
-                              {invoice.amount.toLocaleString('vi-VN')} VNĐ
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-slate-700">
-                            <div className="flex items-center">
-                              <CalendarDays className="h-4 w-4 text-slate-400 mr-1" />
-                              {format(new Date(invoice.createdAt), "dd/MM/yyyy HH:mm", { locale: vi })}
-                            </div>
+                          <TableCell className="font-medium text-blue-600">
+                            HD{invoice.id.toString().padStart(6, '0')}
                           </TableCell>
                           <TableCell>
-                            {getStatusBadge(invoice.status)}
+                            <div className="space-y-1">
+                              <p className="font-medium text-slate-900">{invoice.customerName}</p>
+                              <p className="text-xs text-slate-500">{invoice.customerEmail}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-slate-700">
+                            {format(new Date(invoice.invoiceDate), "dd/MM/yyyy", { locale: vi })}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {invoice.originalAmount.toLocaleString('vi-VN')} VNĐ
+                          </TableCell>
+                          <TableCell className="text-red-600">
+                            -{invoice.discountAmount.toLocaleString('vi-VN')} VNĐ
+                          </TableCell>
+                          <TableCell className="font-bold text-green-600">
+                            {invoice.finalAmount.toLocaleString('vi-VN')} VNĐ
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={getStatusColor(invoice.status)}>
+                              {getStatusText(invoice.status)}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
+                            <div className="flex justify-end space-x-1">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleViewInvoice(invoice)}
-                                className="hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-colors duration-150"
+                                onClick={() => handleView(invoice)}
+                                className="hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
                               >
-                                <Eye className="h-4 w-4 mr-1" />
-                                Xem
+                                <Eye className="h-3 w-3" />
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-colors duration-150"
+                                onClick={() => handleEdit(invoice)}
+                                className="hover:bg-orange-50 hover:text-orange-700 hover:border-orange-200"
                               >
-                                <Download className="h-4 w-4 mr-1" />
-                                Tải PDF
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePrintInvoice(invoice)}
+                                className="hover:bg-purple-50 hover:text-purple-700 hover:border-purple-200"
+                              >
+                                <Printer className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleExportInvoice(invoice)}
+                                className="hover:bg-green-50 hover:text-green-700 hover:border-green-200"
+                              >
+                                <Download className="h-3 w-3" />
                               </Button>
                             </div>
                           </TableCell>
@@ -463,73 +853,244 @@ export default function InvoicesPage() {
         </div>
       </div>
 
-      {/* Invoice Detail Dialog */}
+      {/* Add/Edit Invoice Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Chi Tiết Hóa Đơn</DialogTitle>
+            <DialogTitle>{currentInvoice ? 'Chỉnh Sửa Hóa Đơn' : 'Tạo Hóa Đơn Mới'}</DialogTitle>
             <DialogDescription>
-              Thông tin chi tiết về hóa đơn {currentInvoice?.invoiceNumber}
+              {currentInvoice ? 'Cập nhật thông tin hóa đơn' : 'Tạo hóa đơn mới cho đặt sân'}
             </DialogDescription>
           </DialogHeader>
-          
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="bookingId">ID Đặt sân *</Label>
+              <Input
+                id="bookingId"
+                type="number"
+                value={formData.bookingId}
+                onChange={(e) => setFormData({...formData, bookingId: Number(e.target.value)})}
+                placeholder="Nhập ID đặt sân"
+                disabled={!!currentInvoice}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="discountAmount">Giảm giá (VNĐ)</Label>
+                <Input
+                  id="discountAmount"
+                  type="number"
+                  value={formData.discountAmount}
+                  onChange={(e) => setFormData({...formData, discountAmount: Number(e.target.value)})}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Trạng thái *</Label>
+                <Select 
+                  value={formData.status} 
+                  onValueChange={(value) => setFormData({...formData, status: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pending">Chờ thanh toán</SelectItem>
+                    <SelectItem value="Paid">Đã thanh toán</SelectItem>
+                    <SelectItem value="Cancelled">Đã hủy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Ghi chú</Label>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                placeholder="Ghi chú thêm cho hóa đơn"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button onClick={handleSaveInvoice} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+              {currentInvoice ? 'Cập Nhật' : 'Tạo Mới'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Invoice Details Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chi Tiết Hóa Đơn HD{currentInvoice?.id.toString().padStart(6, '0')}</DialogTitle>
+            <DialogDescription>
+              Thông tin chi tiết và các mục trong hóa đơn
+            </DialogDescription>
+          </DialogHeader>
           {currentInvoice && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Hóa đơn #{currentInvoice.invoiceNumber}</h3>
-                  <p className="text-sm text-slate-500">
-                    Ngày tạo: {format(new Date(currentInvoice.createdAt), "dd/MM/yyyy HH:mm", { locale: vi })}
-                  </p>
-                </div>
-                {getStatusBadge(currentInvoice.status)}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-1">Thông tin khách hàng</h4>
-                  <p className="text-slate-900">{currentInvoice.customerName}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-1">Mã đặt sân</h4>
-                  <p className="text-slate-900">#{currentInvoice.bookingId}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-1">Sân</h4>
-                  <p className="text-slate-900">{currentInvoice.courtName}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-1">Số tiền</h4>
-                  <p className="text-slate-900 font-bold">{currentInvoice.amount.toLocaleString('vi-VN')} VNĐ</p>
-                </div>
-              </div>
-              
-              {currentInvoice.status === "paid" && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-2">Thông tin thanh toán</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <h5 className="text-xs text-slate-500 mb-1">Thời gian thanh toán</h5>
-                      <p className="text-slate-900">{format(new Date(currentInvoice.paidAt!), "dd/MM/yyyy HH:mm", { locale: vi })}</p>
-                    </div>
-                    <div>
-                      <h5 className="text-xs text-slate-500 mb-1">Phương thức thanh toán</h5>
-                      <p className="text-slate-900">{currentInvoice.paymentMethod}</p>
-                    </div>
+            <div className="space-y-6 py-4">
+              {/* Invoice Header */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-slate-900 flex items-center">
+                    <User className="h-4 w-4 mr-2" />
+                    Thông tin khách hàng
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">Tên:</span> {currentInvoice.customerName}</p>
+                    <p><span className="font-medium">Email:</span> {currentInvoice.customerEmail}</p>
+                    <p><span className="font-medium">Điện thoại:</span> {currentInvoice.customerPhone}</p>
                   </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-slate-900 flex items-center">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Thông tin hóa đơn
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">Ngày tạo:</span> {format(new Date(currentInvoice.invoiceDate), "dd/MM/yyyy", { locale: vi })}</p>
+                    <p><span className="font-medium">Booking ID:</span> {currentInvoice.bookingId}</p>
+                    <p><span className="font-medium">Trạng thái:</span> 
+                      <Badge className={`ml-2 ${getStatusColor(currentInvoice.status)}`}>
+                        {getStatusText(currentInvoice.status)}
+                      </Badge>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoice Details Table */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-900">Chi tiết hóa đơn</h4>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Mục</TableHead>
+                        <TableHead>Ngày</TableHead>
+                        <TableHead>Thời gian</TableHead>
+                        <TableHead>SL</TableHead>
+                        <TableHead>Đơn giá</TableHead>
+                        <TableHead>Thành tiền</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {currentInvoice.details?.map((detail, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{detail.itemName}</p>
+                              {detail.courtName && (
+                                <p className="text-xs text-slate-500">{detail.courtName}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {detail.bookingDate && format(new Date(detail.bookingDate), "dd/MM", { locale: vi })}
+                          </TableCell>
+                          <TableCell>
+                            {detail.startTime && detail.endTime && 
+                              `${detail.startTime} - ${detail.endTime}`
+                            }
+                          </TableCell>
+                          <TableCell>{detail.quantity}</TableCell>
+                          <TableCell>{detail.unitPrice.toLocaleString('vi-VN')} VNĐ</TableCell>
+                          <TableCell className="font-medium">{detail.amount.toLocaleString('vi-VN')} VNĐ</TableCell>
+                        </TableRow>
+                      )) || (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-slate-500">
+                            Không có chi tiết
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Invoice Summary */}
+              <div className="bg-slate-50 p-4 rounded-lg space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Tổng tiền gốc:</span>
+                  <span className="font-medium">{currentInvoice.originalAmount.toLocaleString('vi-VN')} VNĐ</span>
+                </div>
+                <div className="flex justify-between text-sm text-red-600">
+                  <span>Giảm giá:</span>
+                  <span className="font-medium">-{currentInvoice.discountAmount.toLocaleString('vi-VN')} VNĐ</span>
+                </div>
+                <hr className="border-slate-300" />
+                <div className="flex justify-between text-lg font-bold">
+                  <span>Thành tiền:</span>
+                  <span className="text-green-600">{currentInvoice.finalAmount.toLocaleString('vi-VN')} VNĐ</span>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {currentInvoice.notes && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-slate-900">Ghi chú</h4>
+                  <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
+                    {currentInvoice.notes}
+                  </p>
                 </div>
               )}
             </div>
           )}
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
               Đóng
             </Button>
-            <Button>
-              <Download className="h-4 w-4 mr-2" />
-              Tải PDF
-            </Button>
+            {currentInvoice && currentInvoice.status === "Pending" && (
+              <>
+                <Button
+                  onClick={() => handlePaymentCash(currentInvoice)}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Thanh toán tiền mặt
+                </Button>
+                <Button
+                  onClick={() => handlePaymentMomo(currentInvoice)}
+                  className="bg-[#AF1681] hover:bg-[#8F1168] text-white"
+                >
+                  <Image
+                    src="/momo-icon.svg"
+                    alt="MoMo"
+                    width={16}
+                    height={16}
+                    className="mr-2"
+                  />
+                  Thanh toán MoMo
+                </Button>
+              </>
+            )}
+            {currentInvoice && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => handlePrintInvoice(currentInvoice)}
+                  className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  In
+                </Button>
+                <Button
+                  onClick={() => handleExportInvoice(currentInvoice)}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Xuất PDF
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

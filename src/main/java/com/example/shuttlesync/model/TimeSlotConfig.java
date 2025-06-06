@@ -47,7 +47,7 @@ public class TimeSlotConfig {
     @Column(name = "UpdatedAt")
     private LocalDateTime updatedAt;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "UpdatedBy")
     private User updatedBy;
 

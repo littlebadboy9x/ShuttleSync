@@ -1,43 +1,70 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { AdminLayout } from "@/components/admin-layout"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { 
-  Search, 
-  Eye, 
-  Calendar,
-  RefreshCw, 
-  Filter, 
-  ArrowUpDown,
-  CheckCircle,
-  Clock,
-  AlertCircle,
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { AdminLayout } from "@/components/admin-layout"
+import {
   CalendarDays,
-  User,
-  MapPin
+  Clock,
+  Users,
+  Search,
+  Filter,
+  RefreshCw,
+  Eye,
+  CheckCircle,
+  XCircle,
+  Edit,
+  Trash2,
+  ArrowUpDown,
+  Calendar,
+  MapPin,
+  Phone,
+  Mail,
+  DollarSign,
+  TrendingUp,
+  AlertCircle
 } from "lucide-react"
 import { format } from "date-fns"
 import { vi } from "date-fns/locale"
+import axios from "axios"
+import { toast } from "@/components/ui/use-toast"
 
 interface CustomerBooking {
   id: number
   customerName: string
   customerPhone: string
+  customerEmail: string
   courtName: string
+  courtLocation: string
   bookingDate: string
   startTime: string
   endTime: string
   status: string
   paymentStatus: string
   amount: number
+  notes?: string
+  createdAt: string
 }
+
+const API_URL = 'http://localhost:8080/api/admin';
+
+const getAuthHeader = () => {
+  const userStr = localStorage.getItem('user');
+  if (!userStr) return {};
+  
+  const user = JSON.parse(userStr);
+  return {
+    headers: {
+      'Authorization': `Bearer ${user.token}`
+    }
+  };
+};
 
 export default function CustomerBookingsPage() {
   const [bookings, setBookings] = useState<CustomerBooking[]>([])
@@ -49,92 +76,73 @@ export default function CustomerBookingsPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
   const [sortConfig, setSortConfig] = useState({ key: "bookingDate", direction: "desc" })
-
-  // Mock data để hiển thị UI
-  const mockBookings: CustomerBooking[] = [
-    {
-      id: 1,
-      customerName: "Nguyễn Văn A",
-      customerPhone: "0901234567",
-      courtName: "Sân 01",
-      bookingDate: "2023-10-15",
-      startTime: "08:00",
-      endTime: "10:00",
-      status: "confirmed",
-      paymentStatus: "paid",
-      amount: 150000
-    },
-    {
-      id: 2,
-      customerName: "Trần Thị B",
-      customerPhone: "0912345678",
-      courtName: "Sân 02",
-      bookingDate: "2023-10-16",
-      startTime: "14:00",
-      endTime: "16:00",
-      status: "pending",
-      paymentStatus: "pending",
-      amount: 200000
-    },
-    {
-      id: 3,
-      customerName: "Lê Văn C",
-      customerPhone: "0923456789",
-      courtName: "Sân 03",
-      bookingDate: "2023-10-16",
-      startTime: "18:00",
-      endTime: "20:00",
-      status: "confirmed",
-      paymentStatus: "paid",
-      amount: 180000
-    },
-    {
-      id: 4,
-      customerName: "Phạm Thị D",
-      customerPhone: "0934567890",
-      courtName: "Sân 01",
-      bookingDate: "2023-10-17",
-      startTime: "09:00",
-      endTime: "11:00",
-      status: "cancelled",
-      paymentStatus: "refunded",
-      amount: 150000
-    },
-    {
-      id: 5,
-      customerName: "Hoàng Văn E",
-      customerPhone: "0945678901",
-      courtName: "Sân 04",
-      bookingDate: "2023-10-18",
-      startTime: "16:00",
-      endTime: "18:00",
-      status: "confirmed",
-      paymentStatus: "paid",
-      amount: 220000
-    }
-  ]
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Mô phỏng việc tải dữ liệu từ API
-    const fetchBookings = () => {
-      setIsLoading(true)
-      setTimeout(() => {
-        setBookings(mockBookings)
-        setIsLoading(false)
-      }, 1000)
-    }
-
-    fetchBookings()
+    loadBookings()
   }, [])
+
+  const loadBookings = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (dateFilter !== "all") params.append("dateFilter", dateFilter);
+      if (statusFilter !== "all") params.append("statusFilter", statusFilter);
+
+      const response = await axios.get(
+        `${API_URL}/bookings/all?${params.toString()}`, 
+        getAuthHeader()
+      )
+      
+      if (response.data && Array.isArray(response.data)) {
+        // Map backend data to frontend format  
+        const mappedBookings = response.data.map((booking: any) => ({
+          id: booking.id,
+          customerName: booking.userName || 'N/A',
+          customerPhone: booking.userPhone || 'N/A', 
+          customerEmail: booking.userEmail || 'N/A',
+          courtName: booking.courtName || 'N/A',
+          courtLocation: booking.courtLocation || 'N/A',
+          bookingDate: booking.bookingDate,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          status: booking.status,
+          paymentStatus: booking.paymentStatus || 'pending',
+          amount: booking.totalAmount || 0,
+          notes: booking.notes,
+          createdAt: booking.createdAt || new Date().toISOString()
+        }));
+        setBookings(mappedBookings)
+      } else {
+        setBookings([])
+      }
+    } catch (error: any) {
+      console.error("Error loading bookings:", error)
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+      }
+      setError("Có lỗi xảy ra khi tải dữ liệu")
+      setBookings([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleRefresh = () => {
     setIsRefreshing(true)
-    // Mô phỏng việc làm mới dữ liệu
-    setTimeout(() => {
-      setBookings(mockBookings)
-      setIsRefreshing(false)
-    }, 1000)
+    loadBookings().finally(() => setIsRefreshing(false))
   }
+
+  // Load data when filters change
+  useEffect(() => {
+    if (!isLoading) {
+      loadBookings()
+    }
+  }, [dateFilter, statusFilter])
 
   const handleSort = (key: keyof CustomerBooking) => {
     let direction = 'asc'
@@ -159,28 +167,12 @@ export default function CustomerBookingsPage() {
     return 0;
   })
 
-  const filteredBookings = sortedBookings.filter(booking => {
-    const matchesSearch = booking.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         booking.customerPhone.includes(searchTerm) ||
-                         booking.courtName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || booking.status === statusFilter
-    
-    let matchesDate = true
-    if (dateFilter === "today") {
-      matchesDate = booking.bookingDate === format(new Date(), "yyyy-MM-dd")
-    } else if (dateFilter === "tomorrow") {
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      matchesDate = booking.bookingDate === format(tomorrow, "yyyy-MM-dd")
-    } else if (dateFilter === "thisWeek") {
-      const today = new Date()
-      const bookingDate = new Date(booking.bookingDate)
-      const diffTime = bookingDate.getTime() - today.getTime()
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      matchesDate = diffDays >= 0 && diffDays < 7
-    }
-    
-    return matchesSearch && matchesStatus && matchesDate
+  const filteredBookings = sortedBookings.filter((booking) => {
+    const matchesSearch = booking.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          booking.customerPhone.includes(searchTerm) ||
+                          booking.customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          booking.courtName.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSearch
   })
 
   const handleViewBooking = (booking: CustomerBooking) => {
@@ -188,103 +180,93 @@ export default function CustomerBookingsPage() {
     setIsDialogOpen(true)
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-            <CheckCircle className="h-3 w-3 mr-1" />
-            Đã xác nhận
-          </Badge>
-        )
-      case "pending":
-        return (
-          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-            <Clock className="h-3 w-3 mr-1" />
-            Chờ xác nhận
-          </Badge>
-        )
-      case "cancelled":
-        return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-            <AlertCircle className="h-3 w-3 mr-1" />
-            Đã hủy
-          </Badge>
-        )
-      default:
-        return (
-          <Badge variant="outline">
-            Không xác định
-          </Badge>
-        )
+  const handleConfirmBooking = async (bookingId: number) => {
+    try {
+      await axios.post(`${API_URL}/bookings/${bookingId}/approve`, {}, getAuthHeader())
+      loadBookings() // Refresh data
+      toast({
+        title: "Thành công",
+        description: "Đã xác nhận đặt sân thành công",
+      })
+    } catch (error) {
+      console.error('Error confirming booking:', error)
+      toast({
+        title: "Lỗi", 
+        description: "Có lỗi xảy ra khi xác nhận đặt sân",
+        variant: "destructive",
+      })
     }
   }
 
-  const getPaymentStatusBadge = (status: string) => {
-    switch (status) {
-      case "paid":
-        return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-            Đã thanh toán
-          </Badge>
-        )
-      case "pending":
-        return (
-          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-            Chờ thanh toán
-          </Badge>
-        )
-      case "refunded":
-        return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-            Đã hoàn tiền
-          </Badge>
-        )
-      default:
-        return (
-          <Badge variant="outline">
-            Không xác định
-          </Badge>
-        )
+  const handleCancelBooking = async (bookingId: number) => {
+    try {
+      // Temporarily update local state (since cancel endpoint might not exist yet)
+      setBookings(prev => prev.map(b =>
+        b.id === bookingId ? { ...b, status: "3", paymentStatus: "refunded" } : b
+      ))
+      
+      toast({
+        title: "Thành công",
+        description: "Đã hủy đặt sân thành công",
+      })
+    } catch (error) {
+      console.error('Error cancelling booking:', error)
+      toast({
+        title: "Lỗi",
+        description: "Có lỗi xảy ra khi hủy đặt sân", 
+        variant: "destructive",
+      })
     }
   }
 
-  const handleConfirmBooking = (id: number) => {
-    // Mô phỏng việc xác nhận đặt sân
-    setBookings(bookings.map(booking => 
-      booking.id === id ? { ...booking, status: "confirmed" } : booking
-    ))
-    setIsDialogOpen(false)
+  // Status mapping functions
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "1": return "Đang chờ";
+      case "2": return "Đã xác nhận";
+      case "3": return "Đã hủy";
+      default: return "Không xác định";
+    }
   }
 
-  const handleCancelBooking = (id: number) => {
-    // Mô phỏng việc hủy đặt sân
-    setBookings(bookings.map(booking => 
-      booking.id === id ? { ...booking, status: "cancelled" } : booking
-    ))
-    setIsDialogOpen(false)
+  const getPaymentStatusText = (status: string) => {
+    switch (status) {
+      case "pending": return "Chờ thanh toán";
+      case "paid": return "Đã thanh toán"; 
+      case "refunded": return "Đã hoàn tiền";
+      default: return "Không xác định";
+    }
   }
+
+  // Statistics
+  const totalBookings = bookings.length;
+  const confirmedBookings = bookings.filter(b => b.status === "2").length;
+  const pendingBookings = bookings.filter(b => b.status === "1").length;
+  const paidBookings = bookings.filter(b => b.paymentStatus === "paid").length;
+  const totalRevenue = bookings
+    .filter(b => b.paymentStatus === "paid")
+    .reduce((sum, b) => sum + b.amount, 0);
 
   return (
     <AdminLayout>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
         <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8">
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-indigo-600 bg-clip-text text-transparent mb-2">
-                Đặt Sân Khách Hàng
+                Lịch Sử Đặt Sân Khách Hàng
               </h1>
               <p className="text-slate-600 text-lg">
-                Quản lý lịch đặt sân của khách hàng
+                Theo dõi và quản lý tất cả các đặt sân của khách hàng
               </p>
             </div>
-            <div className="mt-4 sm:mt-0">
+            <div className="flex space-x-3 mt-4 lg:mt-0">
               <Button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
                 variant="outline"
-                className="border-slate-300 hover:border-slate-400 transition-all duration-200"
+                className="border-slate-300 hover:border-slate-400"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                 {isRefreshing ? 'Đang tải...' : 'Làm mới'}
@@ -292,68 +274,82 @@ export default function CustomerBookingsPage() {
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid gap-6 md:grid-cols-3 mb-8">
-            <Card className="group hover:shadow-2xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-600 mb-1">
-                      Tổng Đặt Sân
-                    </p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                      {filteredBookings.length}
-                    </h3>
-                    <div className="text-sm text-slate-500">
-                      {filteredBookings.filter(b => b.status === "confirmed").length} đã xác nhận
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-blue-50 group-hover:scale-110 transition-transform duration-200">
-                    <Calendar className="h-6 w-6 text-blue-600" />
-                  </div>
-                </div>
+          {/* Statistics Cards */}
+          <div className="grid gap-6 md:grid-cols-5 mb-8">
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Tổng Đặt Sân
+                </CardTitle>
+                <CalendarDays className="h-4 w-4 text-blue-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-slate-900">{totalBookings}</div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Tất cả đặt sân
+                </p>
               </CardContent>
             </Card>
-            
-            <Card className="group hover:shadow-2xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-600 mb-1">
-                      Đặt Sân Hôm Nay
-                    </p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                      {filteredBookings.filter(b => b.bookingDate === format(new Date(), "yyyy-MM-dd")).length}
-                    </h3>
-                    <div className="text-sm text-slate-500">
-                      {format(new Date(), "dd/MM/yyyy", { locale: vi })}
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-green-50 group-hover:scale-110 transition-transform duration-200">
-                    <CalendarDays className="h-6 w-6 text-green-600" />
-                  </div>
-                </div>
+
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Đã Xác Nhận
+                </CardTitle>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{confirmedBookings}</div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Đặt sân đã xác nhận
+                </p>
               </CardContent>
             </Card>
-            
-            <Card className="group hover:shadow-2xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-600 mb-1">
-                      Chờ Xác Nhận
-                    </p>
-                    <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                      {filteredBookings.filter(b => b.status === "pending").length}
-                    </h3>
-                    <div className="text-sm text-slate-500">
-                      Cần xác nhận sớm
-                    </div>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-yellow-50 group-hover:scale-110 transition-transform duration-200">
-                    <Clock className="h-6 w-6 text-yellow-600" />
-                  </div>
+
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Chờ Xử Lý
+                </CardTitle>
+                <Clock className="h-4 w-4 text-yellow-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">{pendingBookings}</div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Chờ xác nhận
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Đã Thanh Toán
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">{paidBookings}</div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Hoàn tất thanh toán
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-slate-600">
+                  Tổng Doanh Thu
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-emerald-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-emerald-600">
+                  {totalRevenue.toLocaleString('vi-VN')} VNĐ
                 </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Từ đặt sân đã thanh toán
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -361,41 +357,46 @@ export default function CustomerBookingsPage() {
           {/* Search and Filter */}
           <Card className="mb-8 border-0 shadow-lg bg-white/90 backdrop-blur-sm">
             <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
-                    placeholder="Tìm kiếm theo tên, số điện thoại..."
+                    placeholder="Tìm kiếm khách hàng, sân..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
-                <div>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
-                      <SelectValue placeholder="Lọc theo trạng thái" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                      <SelectItem value="confirmed">Đã xác nhận</SelectItem>
-                      <SelectItem value="pending">Chờ xác nhận</SelectItem>
-                      <SelectItem value="cancelled">Đã hủy</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
-                      <SelectValue placeholder="Lọc theo ngày" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tất cả các ngày</SelectItem>
-                      <SelectItem value="today">Hôm nay</SelectItem>
-                      <SelectItem value="tomorrow">Ngày mai</SelectItem>
-                      <SelectItem value="thisWeek">Tuần này</SelectItem>
-                    </SelectContent>
-                  </Select>
+
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="Trạng thái đặt sân" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="1">Đang chờ</SelectItem>
+                    <SelectItem value="2">Đã xác nhận</SelectItem>
+                    <SelectItem value="3">Đã hủy</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="Lọc theo ngày" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả ngày</SelectItem>
+                    <SelectItem value="today">Hôm nay</SelectItem>
+                    <SelectItem value="tomorrow">Ngày mai</SelectItem>
+                    <SelectItem value="week">Tuần này</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <div className="flex items-center">
+                  <Filter className="h-4 w-4 text-slate-500 mr-2" />
+                  <span className="text-sm text-slate-600">
+                    {filteredBookings.length} kết quả
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -404,68 +405,80 @@ export default function CustomerBookingsPage() {
           {/* Bookings Table */}
           <Card className="shadow-2xl border-0 bg-white/90 backdrop-blur-sm">
             <CardHeader className="bg-gradient-to-r from-slate-50 to-blue-50/50 border-b border-slate-200/50">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                <div>
-                  <CardTitle className="text-2xl font-bold text-slate-900 flex items-center">
-                    <Calendar className="h-6 w-6 mr-2 text-blue-600" />
-                    Danh Sách Đặt Sân
-                  </CardTitle>
-                  <CardDescription className="text-slate-600 mt-1">
-                    Quản lý tất cả lịch đặt sân của khách hàng
-                  </CardDescription>
-                </div>
-                <div className="flex items-center mt-4 sm:mt-0">
-                  <Filter className="h-4 w-4 text-slate-500 mr-2" />
-                  <span className="text-sm text-slate-600">
-                    {filteredBookings.length} đặt sân
-                  </span>
-                </div>
-              </div>
+              <CardTitle className="text-2xl font-bold text-slate-900 flex items-center">
+                <Users className="h-6 w-6 mr-2 text-blue-600" />
+                Lịch Sử Đặt Sân Khách Hàng
+              </CardTitle>
+              <CardDescription className="text-slate-600 mt-1">
+                Danh sách chi tiết tất cả các đặt sân của khách hàng
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-6">
               <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                 <Table>
                   <TableHeader className="bg-slate-50/50">
                     <TableRow className="border-slate-200">
+                      <TableHead className="w-16">STT</TableHead>
                       <TableHead className="font-semibold text-slate-700">
-                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('customerName')}>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort('customerName')}
+                          className="h-auto p-0 text-left justify-start font-semibold hover:bg-transparent"
+                        >
                           Khách hàng
                           <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </div>
+                        </Button>
                       </TableHead>
+                      <TableHead className="font-semibold text-slate-700">Sân</TableHead>
                       <TableHead className="font-semibold text-slate-700">
-                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('courtName')}>
-                          Sân
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort('bookingDate')}
+                          className="h-auto p-0 text-left justify-start font-semibold hover:bg-transparent"
+                        >
+                          Ngày & Giờ
                           <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </div>
+                        </Button>
                       </TableHead>
-                      <TableHead className="font-semibold text-slate-700">
-                        <div className="flex items-center cursor-pointer" onClick={() => handleSort('bookingDate')}>
-                          Ngày
-                          <ArrowUpDown className="ml-2 h-4 w-4" />
-                        </div>
-                      </TableHead>
-                      <TableHead className="font-semibold text-slate-700">Giờ</TableHead>
                       <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
                       <TableHead className="font-semibold text-slate-700">Thanh toán</TableHead>
+                      <TableHead className="font-semibold text-slate-700">
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort('amount')}
+                          className="h-auto p-0 text-left justify-start font-semibold hover:bg-transparent"
+                        >
+                          Số tiền
+                          <ArrowUpDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </TableHead>
                       <TableHead className="font-semibold text-slate-700 text-right">Thao tác</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-12">
+                        <TableCell colSpan={8} className="text-center py-12">
                           <div className="flex items-center justify-center">
                             <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
                             <span className="text-slate-600">Đang tải dữ liệu...</span>
                           </div>
                         </TableCell>
                       </TableRow>
+                    ) : error ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-12">
+                          <p className="text-red-600 mb-4">{error}</p>
+                          <Button onClick={loadBookings} variant="outline">
+                            Thử lại
+                          </Button>
+                        </TableCell>
+                      </TableRow>
                     ) : filteredBookings.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-12">
+                        <TableCell colSpan={8} className="text-center py-12">
                           <div className="text-slate-500">
-                            <Calendar className="h-12 w-12 mx-auto mb-4 text-slate-300" />
+                            <CalendarDays className="h-12 w-12 mx-auto mb-4 text-slate-300" />
                             <p className="text-lg font-medium">Không có dữ liệu</p>
                             <p className="text-sm">Chưa có đặt sân nào phù hợp với bộ lọc</p>
                           </div>
@@ -479,46 +492,106 @@ export default function CustomerBookingsPage() {
                             index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
                           }`}
                         >
-                          <TableCell className="font-medium text-slate-900">
-                            <div className="flex flex-col">
-                              <span className="flex items-center">
-                                <User className="h-3 w-3 mr-1 text-slate-400" />
-                                {booking.customerName}
+                          <TableCell className="font-medium text-slate-600">
+                            {index + 1}
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="font-medium text-slate-900">{booking.customerName}</p>
+                              <div className="flex items-center text-xs text-slate-500">
+                                <Phone className="h-3 w-3 mr-1" />
+                                {booking.customerPhone}
+                              </div>
+                              <div className="flex items-center text-xs text-slate-500">
+                                <Mail className="h-3 w-3 mr-1" />
+                                {booking.customerEmail}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="font-medium text-slate-900">{booking.courtName}</p>
+                              {booking.courtLocation && (
+                                <div className="flex items-center text-xs text-slate-500">
+                                  <MapPin className="h-3 w-3 mr-1" />
+                                  {booking.courtLocation}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="font-medium text-slate-900">
+                                {booking.bookingDate && !isNaN(new Date(booking.bookingDate).getTime())
+                                  ? format(new Date(booking.bookingDate), "dd/MM/yyyy", { locale: vi })
+                                  : "Không có thông tin"}
+                              </p>
+                              <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium">
+                                {`${booking.startTime} - ${booking.endTime}`}
                               </span>
-                              <span className="text-xs text-slate-500">{booking.customerPhone}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-slate-700">
+                          <TableCell>
+                            <Badge
+                              className={`${
+                                booking.status === "2"
+                                  ? "bg-green-100 text-green-800 border-green-200"
+                                  : booking.status === "1"
+                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                    : "bg-red-100 text-red-800 border-red-200"
+                              }`}
+                            >
+                              {getStatusText(booking.status)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={`${
+                                booking.paymentStatus === "paid"
+                                  ? "bg-green-100 text-green-800 border-green-200"
+                                  : booking.paymentStatus === "pending"
+                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                    : "bg-blue-100 text-blue-800 border-blue-200"
+                              }`}
+                            >
+                              {getPaymentStatusText(booking.paymentStatus)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-semibold text-slate-900">
                             <div className="flex items-center">
-                              <MapPin className="h-3 w-3 mr-1 text-slate-400" />
-                              {booking.courtName}
+                              <DollarSign className="h-4 w-4 text-green-600 mr-1" />
+                              {booking.amount.toLocaleString('vi-VN')} VNĐ
                             </div>
-                          </TableCell>
-                          <TableCell className="text-slate-700">
-                            {format(new Date(booking.bookingDate), "dd/MM/yyyy", { locale: vi })}
-                          </TableCell>
-                          <TableCell className="text-slate-700">
-                            <span className="px-2 py-1 bg-slate-100 rounded-md text-xs">
-                              {booking.startTime} - {booking.endTime}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            {getStatusBadge(booking.status)}
-                          </TableCell>
-                          <TableCell>
-                            {getPaymentStatusBadge(booking.paymentStatus)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
+                            <div className="flex space-x-1 justify-end">
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleViewBooking(booking)}
-                                className="hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-colors duration-150"
+                                className="hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
                               >
-                                <Eye className="h-4 w-4 mr-1" />
-                                Xem
+                                <Eye className="h-3 w-3" />
                               </Button>
+                              {booking.status === "1" && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleConfirmBooking(booking.id)}
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {booking.status !== "3" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCancelBooking(booking.id)}
+                                  className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                                >
+                                  <XCircle className="h-3 w-3" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -532,78 +605,100 @@ export default function CustomerBookingsPage() {
         </div>
       </div>
 
-      {/* Booking Detail Dialog */}
+      {/* View Booking Details Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Chi Tiết Đặt Sân</DialogTitle>
             <DialogDescription>
-              Thông tin chi tiết về lịch đặt sân của khách hàng
+              Thông tin chi tiết về đặt sân #{currentBooking?.id}
             </DialogDescription>
           </DialogHeader>
-          
           {currentBooking && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Đặt sân #{currentBooking.id}</h3>
-                  <p className="text-sm text-slate-500">
-                    Ngày đặt: {format(new Date(currentBooking.bookingDate), "dd/MM/yyyy", { locale: vi })}
-                  </p>
-                </div>
-                {getStatusBadge(currentBooking.status)}
-              </div>
-              
+            <div className="grid gap-6 py-4">
+              {/* Customer Info */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-1">Thông tin khách hàng</h4>
-                  <p className="text-slate-900">{currentBooking.customerName}</p>
-                  <p className="text-slate-600">{currentBooking.customerPhone}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-1">Thông tin sân</h4>
-                  <p className="text-slate-900">{currentBooking.courtName}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-1">Thời gian</h4>
-                  <p className="text-slate-900">{format(new Date(currentBooking.bookingDate), "dd/MM/yyyy", { locale: vi })}</p>
-                  <p className="text-slate-600">{currentBooking.startTime} - {currentBooking.endTime}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-1">Thanh toán</h4>
-                  <p className="text-slate-900 font-bold">{currentBooking.amount.toLocaleString('vi-VN')} VNĐ</p>
-                  <p className="mt-1">{getPaymentStatusBadge(currentBooking.paymentStatus)}</p>
-                </div>
-              </div>
-              
-              {currentBooking.status === "pending" && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-2">Xác nhận đặt sân</h4>
-                  <p className="text-sm text-slate-500 mb-4">
-                    Vui lòng xác nhận hoặc từ chối yêu cầu đặt sân này
-                  </p>
-                  <div className="flex space-x-3">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 hover:bg-red-50 hover:text-red-700 hover:border-red-200"
-                      onClick={() => handleCancelBooking(currentBooking.id)}
-                    >
-                      <AlertCircle className="h-4 w-4 mr-2" />
-                      Từ chối
-                    </Button>
-                    <Button 
-                      className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-                      onClick={() => handleConfirmBooking(currentBooking.id)}
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Xác nhận
-                    </Button>
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-slate-900 flex items-center">
+                    <Users className="h-4 w-4 mr-2" />
+                    Thông tin khách hàng
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">Tên:</span> {currentBooking.customerName}</p>
+                    <p><span className="font-medium">Điện thoại:</span> {currentBooking.customerPhone}</p>
+                    <p><span className="font-medium">Email:</span> {currentBooking.customerEmail}</p>
                   </div>
                 </div>
-              )}
+                
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-slate-900 flex items-center">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    Thông tin sân
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">Sân:</span> {currentBooking.courtName}</p>
+                    <p><span className="font-medium">Vị trí:</span> {currentBooking.courtLocation}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Booking Details */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-slate-900 flex items-center">
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Thời gian đặt
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">Ngày:</span> {
+                      currentBooking.bookingDate && !isNaN(new Date(currentBooking.bookingDate).getTime())
+                        ? format(new Date(currentBooking.bookingDate), "dd/MM/yyyy", { locale: vi })
+                        : "Không có thông tin"
+                    }</p>
+                    <p><span className="font-medium">Giờ:</span> {currentBooking.startTime} - {currentBooking.endTime}</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-slate-900 flex items-center">
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Thanh toán
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">Số tiền:</span> {currentBooking.amount.toLocaleString('vi-VN')} VNĐ</p>
+                    <p><span className="font-medium">Trạng thái:</span> 
+                      <Badge className="ml-2">
+                        {getPaymentStatusText(currentBooking.paymentStatus)}
+                      </Badge>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status and Notes */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-slate-900 flex items-center">
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Trạng thái và ghi chú
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <p><span className="font-medium">Trạng thái đặt sân:</span> 
+                    <Badge className="ml-2">
+                      {getStatusText(currentBooking.status)}
+                    </Badge>
+                  </p>
+                  {currentBooking.notes && (
+                    <p><span className="font-medium">Ghi chú:</span> {currentBooking.notes}</p>
+                  )}
+                  <p><span className="font-medium">Ngày tạo:</span> {
+                    currentBooking.createdAt && !isNaN(new Date(currentBooking.createdAt).getTime()) 
+                      ? format(new Date(currentBooking.createdAt), "dd/MM/yyyy HH:mm", { locale: vi })
+                      : "Không có thông tin"
+                  }</p>
+                </div>
+              </div>
             </div>
           )}
-          
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Đóng

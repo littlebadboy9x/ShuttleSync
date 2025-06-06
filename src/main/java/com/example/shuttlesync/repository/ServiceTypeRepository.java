@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ServiceTypeRepository extends JpaRepository<ServiceType, Integer> {
@@ -14,9 +15,14 @@ public interface ServiceTypeRepository extends JpaRepository<ServiceType, Intege
     @Query("SELECT st FROM ServiceType st WHERE st.typeName LIKE %:keyword% OR st.description LIKE %:keyword%")
     List<ServiceType> searchServiceTypes(@Param("keyword") String keyword);
     
-    @Query("SELECT st FROM ServiceType st WHERE EXISTS (SELECT s FROM Service s WHERE s.serviceType = st AND s.isActive = true)")
+    Optional<ServiceType> findByTypeNameIgnoreCase(String typeName);
+    
+    @Query("SELECT DISTINCT st FROM ServiceType st JOIN st.services s WHERE s.isActive = true")
     List<ServiceType> findTypesWithActiveServices();
     
-    @Query("SELECT st FROM ServiceType st WHERE NOT EXISTS (SELECT s FROM Service s WHERE s.serviceType = st)")
+    @Query("SELECT st FROM ServiceType st WHERE st.services IS EMPTY")
     List<ServiceType> findEmptyTypes();
+    
+    @Query("SELECT st.id, COUNT(s) FROM ServiceType st LEFT JOIN st.services s GROUP BY st.id")
+    List<Object[]> countServicesByType();
 } 
