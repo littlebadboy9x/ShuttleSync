@@ -40,4 +40,6 @@ public interface BookingService {
     boolean isTimeSlotBooked(Integer courtId, Integer timeSlotId, LocalDate bookingDate);
 
     List<BookingDTO> getRecentBookings();
+    
+    Booking saveBooking(Booking booking);
 }

@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "HolidayDates")
@@ -13,24 +14,31 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class HolidayDate {
-
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
-
-    @Column(name = "HolidayDate", nullable = false, unique = true)
-    private LocalDate holidayDate;
-
-    @Column(name = "HolidayName", nullable = false, length = 100)
+    
+    @Column(name = "HolidayDate", nullable = false)
+    private LocalDate date;
+    
+    @Column(name = "HolidayName", nullable = false)
     private String holidayName;
-
-    @Column(name = "Description", length = 255)
+    
+    @Column(name = "Description")
     private String description;
-
+    
     @Column(name = "IsRecurringYearly")
     private Boolean isRecurringYearly = false;
-
-    @ManyToOne
+    
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "CreatedBy")
     private User createdBy;
+    
+    @PrePersist
+    protected void onCreate() {
+        if (createdBy == null) {
+            // Đặt giá trị mặc định nếu cần
+        }
+    }
 } 

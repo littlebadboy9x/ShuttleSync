@@ -25,6 +25,7 @@ public class TimeSlotServiceImpl implements TimeSlotService {
     private final BookingRepository bookingRepository;
     private final HolidayDateRepository holidayDateRepository;
     private final SystemChangeLogRepository systemChangeLogRepository;
+    private final BookingStatusTypeRepository bookingStatusTypeRepository;
 
     @Override
     public List<TimeSlot> getAllTimeSlotsByCourt(Integer courtId) {
@@ -165,5 +166,72 @@ public class TimeSlotServiceImpl implements TimeSlotService {
         
         // Nếu không phải cuối tuần hoặc ngày lễ, thì là ngày thường
         return "weekday";
+    }
+    
+    @Override
+    public int resetPastTimeSlots(LocalDate date) {
+        // Lấy trạng thái "Trống" từ repository
+        StatusType trongStatus = statusTypeRepository.findById((byte)1)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Trống'"));
+        
+        // Tìm tất cả các khung giờ đã đặt cho ngày đã qua
+        List<TimeSlot> bookedTimeSlots = timeSlotRepository.findBookedTimeSlotsForDate(date);
+        
+        int updatedCount = 0;
+        
+        for (TimeSlot timeSlot : bookedTimeSlots) {
+            // Đặt lại trạng thái thành "Trống"
+            timeSlot.setStatus(trongStatus);
+            timeSlotRepository.save(timeSlot);
+            updatedCount++;
+        }
+        
+        return updatedCount;
+    }
+    
+    @Override
+    public int resetExpiredTimeSlots(LocalDate date, LocalTime currentTime) {
+        try {
+            // Lấy trạng thái "Trống" từ repository
+            StatusType trongStatus = statusTypeRepository.findById((byte)1)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Trống'"));
+            
+            // Lấy trạng thái "Đã hoàn thành" cho booking (ID = 4)
+            BookingStatusType completedStatus = bookingStatusTypeRepository.findById((byte)4)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Đã hoàn thành'"));
+            
+            // Tìm tất cả các khung giờ đã kết thúc cho ngày hiện tại, dựa trên các booking đang hoạt động
+            List<TimeSlot> expiredTimeSlots = timeSlotRepository.findExpiredTimeSlotsForBookings(date, currentTime);
+            
+            int updatedCount = 0;
+            
+            for (TimeSlot timeSlot : expiredTimeSlots) {
+                // Tìm và cập nhật trạng thái các booking liên quan
+                List<Booking> bookings = bookingRepository.findByCourtAndBookingDateAndTimeSlot(
+                        timeSlot.getCourt(), date, timeSlot);
+                
+                for (Booking booking : bookings) {
+                    // Chỉ cập nhật các booking đang ở trạng thái "Chờ xác nhận" (1) hoặc "Đã xác nhận" (2)
+                    // Không cập nhật các booking đã ở trạng thái "Đã hủy" (3)
+                    if (booking.getStatus().getId() == 1 || booking.getStatus().getId() == 2) {
+                        booking.setStatus(completedStatus);
+                        bookingRepository.save(booking);
+                    }
+                }
+                
+                // Đặt lại trạng thái timeSlot thành "Trống" cho tất cả các slot đã hết hạn
+                // bất kể booking ở trạng thái nào
+                timeSlot.setStatus(trongStatus);
+                timeSlotRepository.save(timeSlot);
+                updatedCount++;
+            }
+            
+            return updatedCount;
+        } catch (Exception e) {
+            // Log lỗi và ném ngoại lệ để xử lý ở tầng trên
+            System.err.println("Lỗi khi reset khung giờ hết hạn: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 }

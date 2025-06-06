@@ -8,35 +8,32 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "Configurations")
+@Table(name = "configurations")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class Configuration {
-
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
-
-    @Column(name = "ConfigKey", nullable = false, length = 50, unique = true)
+    
+    @Column(name = "config_key", unique = true, nullable = false)
     private String configKey;
-
-    @Column(name = "ConfigValue", nullable = false, length = 255)
+    
+    @Column(name = "config_value", nullable = false)
     private String configValue;
-
-    @Column(name = "Description", length = 255)
+    
+    @Column(name = "description")
     private String description;
-
-    @Column(name = "UpdatedAt")
+    
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+    
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    @ManyToOne
-    @JoinColumn(name = "UpdatedBy")
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "updated_by")
     private User updatedBy;
-
-    @PrePersist
-    @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
 } 

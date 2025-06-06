@@ -113,7 +113,7 @@ export default function AdminDashboard() {
 
             // Fetch bookings
             console.log("Đang gọi API bookings...");
-            const bookingsResponse = await fetch('http://localhost:8080/api/bookings/recent', {
+            const bookingsResponse = await fetch('http://localhost:8080/api/admin/bookings/recent', {
                 headers: authHeader
             });
             console.log("Status API bookings:", bookingsResponse.status);
@@ -133,7 +133,7 @@ export default function AdminDashboard() {
             // Fetch stats
             try {
                 console.log("Đang gọi API admin/stats...");
-                const statsResponse = await fetch('http://localhost:8080/api/admin/stats', {
+                const statsResponse = await fetch('http://localhost:8080/api/admin/bookings/stats', {
                     headers: authHeader
                 });
                 console.log("Status API stats:", statsResponse.status);
@@ -200,37 +200,6 @@ export default function AdminDashboard() {
         }
     }
 
-    const handleConfirmBooking = async (bookingId: number) => {
-        try {
-            // Lấy token từ localStorage
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            const token = user.token;
-
-            if (!token) {
-                console.error('Không tìm thấy token, vui lòng đăng nhập lại');
-                return;
-            }
-
-            const authHeader = {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            };
-
-            const response = await fetch(`http://localhost:8080/api/admin/bookings/${bookingId}/confirm`, {
-                method: 'POST',
-                headers: authHeader
-            })
-
-            if (response.ok) {
-                fetchDashboardData() // Refresh data after confirmation
-            } else if (response.status === 401 || response.status === 403) {
-                window.location.href = '/login';
-            }
-        } catch (error) {
-            console.error('Error confirming booking:', error)
-        }
-    }
-
     const statsCards = [
         {
             title: "Tổng Đặt Sân",
@@ -261,7 +230,7 @@ export default function AdminDashboard() {
         },
         {
             title: "Doanh Thu",
-            value: `${stats.totalRevenue.toLocaleString('vi-VN')} VNĐ`,
+            value: `${(stats.totalRevenue || 0).toLocaleString('vi-VN')} VNĐ`,
             icon: DollarSign,
             color: "bg-orange-500",
             bgColor: "bg-orange-50",
@@ -377,13 +346,13 @@ export default function AdminDashboard() {
                                 <Table>
                                     <TableHeader className="bg-slate-50/50">
                                         <TableRow className="border-slate-200">
-                                            <TableHead className="font-semibold text-slate-700">Mã</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Người dùng</TableHead>
+                                            <TableHead className="font-semibold text-slate-700 w-16">STT</TableHead>
+                                            <TableHead className="font-semibold text-slate-700">Khách hàng</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Sân</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Ngày</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Giờ</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Thao tác</TableHead>
+                                            <TableHead className="font-semibold text-slate-700 text-right">Thao tác</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -415,9 +384,7 @@ export default function AdminDashboard() {
                                                     }`}
                                                 >
                                                     <TableCell className="font-medium text-slate-900">
-                                                        <span className="px-2 py-1 bg-slate-100 rounded-md text-sm">
-                                                            #{booking.id}
-                                                        </span>
+                                                        {index + 1}
                                                     </TableCell>
                                                     <TableCell className="font-medium text-slate-800">
                                                         {booking.userName}
@@ -463,16 +430,6 @@ export default function AdminDashboard() {
                                                                 <Eye className="h-4 w-4 mr-1" />
                                                                 Xem
                                                             </Button>
-                                                            {booking.status === "1" && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    onClick={() => handleConfirmBooking(booking.id)}
-                                                                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-sm hover:shadow-md transition-all duration-150"
-                                                                >
-                                                                    <CheckCircle className="h-4 w-4 mr-1" />
-                                                                    Xác nhận
-                                                                </Button>
-                                                            )}
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>

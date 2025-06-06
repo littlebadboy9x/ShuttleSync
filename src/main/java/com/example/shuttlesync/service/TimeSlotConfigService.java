@@ -16,17 +16,24 @@ public interface TimeSlotConfigService {
     
     TimeSlotConfig getActiveConfig();
     
-    TimeSlotConfig createConfig(Integer slotDurationMinutes, LocalTime startTimeFirstSlot, 
-                              LocalTime endTimeLastSlot, Integer maxSlotsPerDay, 
-                              LocalDate effectiveFrom, LocalDate effectiveTo, User updatedBy);
+    TimeSlotConfig createConfig(
+            Integer slotDurationMinutes, 
+            LocalTime startTimeFirstSlot, 
+            LocalTime endTimeLastSlot, 
+            Integer maxSlotsPerDay, 
+            LocalDate effectiveFrom, 
+            LocalDate effectiveTo, 
+            User updatedBy);
     
-    TimeSlotConfig updateConfig(Integer id, Integer slotDurationMinutes, LocalTime startTimeFirstSlot,
-                              LocalTime endTimeLastSlot, Integer maxSlotsPerDay,
-                              LocalDate effectiveFrom, LocalDate effectiveTo, User updatedBy);
+    TimeSlotConfig updateConfig(
+            Integer id, 
+            Integer slotDurationMinutes, 
+            LocalTime startTimeFirstSlot, 
+            LocalTime endTimeLastSlot, 
+            Integer maxSlotsPerDay, 
+            LocalDate effectiveFrom, 
+            LocalDate effectiveTo, 
+            User updatedBy);
     
     void deactivateConfig(Integer id, User updatedBy);
-    
-    List<TimeSlotConfig> getConfigsByDateRange(LocalDate startDate, LocalDate endDate);
-    
-    boolean isConfigActive(Integer id);
 } 

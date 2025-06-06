@@ -15,19 +15,15 @@ public interface HolidayDateService {
     
     Optional<HolidayDate> getHolidayByDate(LocalDate date);
     
-    HolidayDate createHoliday(LocalDate date, String holidayName, String description, 
-                            Boolean isRecurringYearly, User createdBy);
+    HolidayDate createHoliday(LocalDate date, String holidayName, String description, Boolean isRecurringYearly, User updatedBy);
     
-    HolidayDate updateHoliday(Integer id, String holidayName, String description, 
-                            Boolean isRecurringYearly, User updatedBy);
+    HolidayDate updateHoliday(Integer id, String holidayName, String description, Boolean isRecurringYearly, User updatedBy);
     
     void deleteHoliday(Integer id);
     
     List<HolidayDate> getHolidaysByYear(Integer year);
     
     List<HolidayDate> getRecurringHolidays();
-    
-    List<HolidayDate> getHolidaysByDateRange(LocalDate startDate, LocalDate endDate);
     
     boolean isHoliday(LocalDate date);
 } 

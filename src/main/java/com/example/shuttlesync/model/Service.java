@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import com.fasterxml.jackson.annotation.JsonBackReference;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 
@@ -13,15 +13,15 @@ import java.math.BigDecimal;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(exclude = "serviceType")
 public class Service {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "ServiceTypeId")
-    @JsonBackReference
     private ServiceType serviceType;
 
     @Column(name = "ServiceName", nullable = false, length = 100)
@@ -35,4 +35,16 @@ public class Service {
 
     @Column(name = "IsActive")
     private Boolean isActive = true;
+    
+    // Phương thức tiện ích để lấy tên loại dịch vụ (nếu có)
+    @Transient
+    public String getServiceTypeName() {
+        return serviceType != null ? serviceType.getTypeName() : null;
+    }
+    
+    // Phương thức tiện ích để lấy ID loại dịch vụ (nếu có)
+    @Transient
+    public Integer getServiceTypeId() {
+        return serviceType != null ? serviceType.getId() : null;
+    }
 } 

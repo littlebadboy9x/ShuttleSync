@@ -38,4 +38,17 @@ public interface InvoiceService {
     BigDecimal calculateTotalAmount(Integer invoiceId);
     
     void generateInvoicePDF(Integer invoiceId);
+
+    Invoice getInvoiceById(Long id);
+    Invoice updateStatus(Long id, String status);
+    
+    /**
+     * Áp dụng voucher vào hóa đơn
+     * 
+     * @param invoiceId ID của hóa đơn
+     * @param voucherId ID của voucher
+     * @param user Người dùng thực hiện thao tác
+     * @return Hóa đơn đã được cập nhật
+     */
+    Invoice applyVoucherToInvoice(Integer invoiceId, Integer voucherId, User user);
 } 

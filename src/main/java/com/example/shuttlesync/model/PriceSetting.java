@@ -20,15 +20,14 @@ public class PriceSetting {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @ManyToOne
-    @JoinColumn(name = "CourtId")
-    private Court court;
+    @Column(name = "CourtId")
+    private Integer courtId;
 
     @Column(name = "TimeSlotIndex")
     private Integer timeSlotIndex;
 
-    @Column(name = "DayType", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
+    @Column(name = "DayType", nullable = false)
     private DayType dayType;
 
     @Column(name = "Price", nullable = false, precision = 10, scale = 2)
@@ -49,7 +48,7 @@ public class PriceSetting {
     @Column(name = "UpdatedAt")
     private LocalDateTime updatedAt;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "UpdatedBy")
     private User updatedBy;
 

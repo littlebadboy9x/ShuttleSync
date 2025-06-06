@@ -16,23 +16,30 @@ public interface PriceSettingService {
     
     List<PriceSetting> getActivePriceSettings();
     
-    PriceSetting createPriceSetting(Integer courtId, Integer timeSlotIndex, 
-                                  PriceSetting.DayType dayType, BigDecimal price,
-                                  LocalDate effectiveFrom, LocalDate effectiveTo, User updatedBy);
-    
-    PriceSetting updatePriceSetting(Integer id, Integer courtId, Integer timeSlotIndex,
-                                  PriceSetting.DayType dayType, BigDecimal price,
-                                  LocalDate effectiveFrom, LocalDate effectiveTo, User updatedBy);
-    
-    void deactivatePriceSetting(Integer id, User updatedBy);
-    
     List<PriceSetting> getPriceSettingsByCourt(Integer courtId);
     
     List<PriceSetting> getPriceSettingsByDayType(PriceSetting.DayType dayType);
     
-    List<PriceSetting> getPriceSettingsByDateRange(LocalDate startDate, LocalDate endDate);
-    
     BigDecimal getPriceForCourtAndDate(Integer courtId, LocalDate date, Integer timeSlotIndex);
     
-    boolean isPriceSettingActive(Integer id);
+    PriceSetting createPriceSetting(
+            Integer courtId, 
+            Integer timeSlotIndex, 
+            PriceSetting.DayType dayType, 
+            BigDecimal price, 
+            LocalDate effectiveFrom, 
+            LocalDate effectiveTo, 
+            User updatedBy);
+    
+    PriceSetting updatePriceSetting(
+            Integer id, 
+            Integer courtId, 
+            Integer timeSlotIndex, 
+            PriceSetting.DayType dayType, 
+            BigDecimal price, 
+            LocalDate effectiveFrom, 
+            LocalDate effectiveTo, 
+            User updatedBy);
+    
+    void deactivatePriceSetting(Integer id, User updatedBy);
 } 

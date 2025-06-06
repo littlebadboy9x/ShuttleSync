@@ -1,0 +1,37 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
+
+export default function ConfigCourts() {
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Cấu hình sân</h3>
+      </div>
+      
+      {loading ? (
+        <div className="flex justify-center items-center h-32">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : (
+        <div className="text-center py-6">
+          <p className="text-muted-foreground">
+            Vui lòng sử dụng trang quản lý sân để cấu hình chi tiết.
+          </p>
+          <Button 
+            className="mt-4"
+            onClick={() => window.location.href = "/admin/courts"}
+          >
+            Đi đến trang quản lý sân
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+} 

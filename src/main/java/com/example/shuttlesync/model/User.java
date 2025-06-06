@@ -19,6 +19,7 @@ public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "Id")
     private Integer id;
 
     @NotBlank
@@ -30,6 +31,9 @@ public class User {
     @Column(name = "Email", unique = true)
     private String email;
 
+    @Column(name = "Phone", unique = true)
+    private String phone;
+
     @NotBlank
     @Column(name = "Password")
     private String password;
@@ -38,11 +42,23 @@ public class User {
     @Column(name = "Role")
     private String role; // 'admin' hoặc 'customer'
 
+    @Column(name = "IsActive")
+    private Boolean isActive = true;
+
     @Column(name = "CreatedAt")
     private LocalDateTime createdAt;
+
+    @Column(name = "UpdatedAt")
+    private LocalDateTime updatedAt;
 
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 }

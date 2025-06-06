@@ -16,18 +16,18 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Integer> {
     
     List<Invoice> findByStatus(String status);
     
-    @Query("SELECT i FROM Invoice i WHERE i.invoiceDate = :date")
+    @Query(value = "SELECT * FROM Invoices WHERE CONVERT(DATE, InvoiceDate) = CONVERT(DATE, :date)", nativeQuery = true)
     List<Invoice> findByDate(@Param("date") LocalDate date);
     
-    @Query("SELECT i FROM Invoice i WHERE i.invoiceDate >= :startDate AND i.invoiceDate <= :endDate")
+    @Query(value = "SELECT * FROM Invoices WHERE CONVERT(DATE, InvoiceDate) >= CONVERT(DATE, :startDate) AND CONVERT(DATE, InvoiceDate) <= CONVERT(DATE, :endDate)", nativeQuery = true)
     List<Invoice> findBetweenDates(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
     
-    @Query("SELECT i FROM Invoice i WHERE i.booking.court.id = :courtId AND i.invoiceDate = :date")
+    @Query(value = "SELECT i.* FROM Invoices i JOIN Bookings b ON i.BookingId = b.Id JOIN Courts c ON b.CourtId = c.Id WHERE c.Id = :courtId AND CONVERT(DATE, i.InvoiceDate) = CONVERT(DATE, :date)", nativeQuery = true)
     List<Invoice> findByCourtAndDate(@Param("courtId") Integer courtId, @Param("date") LocalDate date);
     
-    @Query("SELECT i FROM Invoice i WHERE i.booking.user.id = :userId")
+    @Query(value = "SELECT i.* FROM Invoices i JOIN Bookings b ON i.BookingId = b.Id WHERE b.UserId = :userId", nativeQuery = true)
     List<Invoice> findByUserId(@Param("userId") Integer userId);
     
-    @Query("SELECT i FROM Invoice i WHERE i.booking.user.id = :userId AND i.status = :status")
+    @Query(value = "SELECT i.* FROM Invoices i JOIN Bookings b ON i.BookingId = b.Id WHERE b.UserId = :userId AND i.Status = :status", nativeQuery = true)
     List<Invoice> findByUserIdAndStatus(@Param("userId") Integer userId, @Param("status") String status);
 } 

@@ -10,6 +10,6 @@ public class HomeController {
 
     @GetMapping("/")
     public String home() {
-        return "Welcome to ShuttleSync API";
+        return "Welcome to ShuttleSync";
     }
 } 

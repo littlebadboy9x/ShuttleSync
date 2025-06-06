@@ -1,19 +1,21 @@
 package com.example.shuttlesync.model;
 
-import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "ServiceTypes")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString(exclude = "services")
 public class ServiceType {
 
     @Id
@@ -26,7 +28,19 @@ public class ServiceType {
     @Column(name = "Description", length = 255)
     private String description;
 
-    @OneToMany(mappedBy = "serviceType", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonManagedReference
-    private Set<Service> services = new HashSet<>();
+    @OneToMany(mappedBy = "serviceType", fetch = FetchType.LAZY)
+    @JsonIgnore
+    private List<Service> services = new ArrayList<>();
+    
+    // Phương thức helper để thêm service vào loại dịch vụ này
+    public void addService(Service service) {
+        services.add(service);
+        service.setServiceType(this);
+    }
+    
+    // Phương thức helper để xóa service khỏi loại dịch vụ này
+    public void removeService(Service service) {
+        services.remove(service);
+        service.setServiceType(null);
+    }
 }

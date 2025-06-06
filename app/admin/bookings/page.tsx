@@ -31,6 +31,18 @@ import {
     AlertCircle,
     TrendingUp
 } from "lucide-react"
+import axios from "axios"
+import { toast } from "@/components/ui/use-toast"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Booking {
     id: number
@@ -56,6 +68,27 @@ interface BookingStats {
     cancelledBookings: number
 }
 
+interface StatsResponse {
+    totalBookings?: number;
+    todayBookings?: number;
+    totalUsers?: number;
+    totalRevenue?: number;
+}
+
+const API_URL = 'http://localhost:8080/api/admin';
+
+const getAuthHeader = () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return {};
+    
+    const user = JSON.parse(userStr);
+    return {
+        headers: {
+            'Authorization': `Bearer ${user.token}`
+        }
+    };
+};
+
 export default function BookingManagement() {
     const [dateFilter, setDateFilter] = useState<string>("all")
     const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -71,57 +104,27 @@ export default function BookingManagement() {
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
-
-    // Mock data - thay thế bằng API calls thực tế
-    const mockBookings: Booking[] = [
-        {
-            id: 1,
-            userName: "Nguyễn Văn An",
-            userEmail: "anvn@email.com",
-            userPhone: "0901234567",
-            courtName: "Sân Tennis A1",
-            courtLocation: "Tầng 1, Khu A",
-            bookingDate: "2025-05-29",
-            startTime: "08:00",
-            endTime: "10:00",
-            status: "1",
-            totalAmount: 200000,
-            paymentStatus: "pending",
-            createdAt: "2025-05-28T10:30:00Z",
-            notes: "Khách hàng VIP"
-        },
-        {
-            id: 2,
-            userName: "Trần Thị Bình",
-            userEmail: "binhtt@email.com",
-            userPhone: "0907654321",
-            courtName: "Sân Tennis B2",
-            courtLocation: "Tầng 2, Khu B",
-            bookingDate: "2025-05-29",
-            startTime: "14:00",
-            endTime: "16:00",
-            status: "2",
-            totalAmount: 250000,
-            paymentStatus: "paid",
-            createdAt: "2025-05-28T09:15:00Z"
-        },
-        {
-            id: 3,
-            userName: "Lê Hoàng Cường",
-            userEmail: "cuonglh@email.com",
-            userPhone: "0912345678",
-            courtName: "Sân Tennis C3",
-            courtLocation: "Tầng 3, Khu C",
-            bookingDate: "2025-05-30",
-            startTime: "18:00",
-            endTime: "20:00",
-            status: "3",
-            totalAmount: 180000,
-            paymentStatus: "refunded",
-            createdAt: "2025-05-27T16:45:00Z",
-            notes: "Hủy do thời tiết"
-        }
-    ]
+    const [error, setError] = useState<string | null>(null)
+    // State cho dialog đặt sân tại quầy
+    const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false)
+    const [courts, setCourts] = useState<any[]>([])
+    const [timeSlots, setTimeSlots] = useState<any[]>([])
+    const [availableTimeSlots, setAvailableTimeSlots] = useState<number[]>([])
+    const [loadingCourts, setLoadingCourts] = useState(false)
+    const [loadingTimeSlots, setLoadingTimeSlots] = useState(false)
+    const [loadingAvailability, setLoadingAvailability] = useState(false)
+    const [customers, setCustomers] = useState<any[]>([])
+    const [searchCustomer, setSearchCustomer] = useState('')
+    const [loadingCustomers, setLoadingCustomers] = useState(false)
+    const [bookingFormData, setBookingFormData] = useState({
+        customerName: '',
+        customerPhone: '',
+        customerEmail: '',
+        courtId: 0,
+        timeSlotId: 0,
+        bookingDate: format(new Date().setDate(new Date().getDate() + 1), 'yyyy-MM-dd'),
+        notes: ''
+    })
 
     useEffect(() => {
         // Kiểm tra xác thực và quyền admin
@@ -140,7 +143,7 @@ export default function BookingManagement() {
                     return;
                 }
 
-                // Load mock data
+                // Load data if auth successful
                 loadBookingData();
             } catch (error) {
                 console.error('Lỗi khi kiểm tra xác thực:', error);
@@ -151,28 +154,88 @@ export default function BookingManagement() {
         checkAuth();
     }, []);
 
-    const loadBookingData = () => {
-        setLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            setBookings(mockBookings);
-            setStats({
-                totalBookings: mockBookings.length,
-                pendingBookings: mockBookings.filter(b => b.status === "1").length,
-                confirmedBookings: mockBookings.filter(b => b.status === "2").length,
-                cancelledBookings: mockBookings.filter(b => b.status === "3").length,
-            });
+    const loadBookingData = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            
+            // Load bookings với filter
+            const params = new URLSearchParams();
+            if (dateFilter !== "all") params.append("dateFilter", dateFilter);
+            if (statusFilter !== "all") params.append("statusFilter", statusFilter);
+            
+            const bookingsResponse = await axios.get(
+                `${API_URL}/bookings/all?${params.toString()}`, 
+                getAuthHeader()
+            );
+            
+            // Load stats
+            const statsResponse = await axios.get(`${API_URL}/bookings/stats`, getAuthHeader());
+            
+            if (bookingsResponse.data && Array.isArray(bookingsResponse.data)) {
+                // Map backend data to frontend format với trạng thái thanh toán từ hóa đơn
+                // Backend đã cập nhật để trả về trạng thái thanh toán dựa trên hóa đơn
+                const mappedBookings = bookingsResponse.data.map((booking: any) => ({
+                    id: booking.id,
+                    userName: booking.userName || 'N/A',
+                    userEmail: booking.userEmail || 'N/A',
+                    userPhone: booking.userPhone || 'N/A',
+                    courtName: booking.courtName || 'N/A',
+                    courtLocation: booking.courtLocation || 'N/A',
+                    bookingDate: booking.bookingDate,
+                    startTime: booking.startTime,
+                    endTime: booking.endTime,
+                    status: booking.status,
+                    totalAmount: booking.totalAmount || 0,
+                    paymentStatus: booking.paymentStatus || 'pending', // Lấy từ API, đã được cập nhật từ hóa đơn
+                    createdAt: booking.createdAt || new Date().toISOString(),
+                    notes: booking.notes
+                }));
+                setBookings(mappedBookings);
+            } else {
+                setBookings([]);
+            }
+            
+            if (statsResponse.data && typeof statsResponse.data === 'object') {
+                const stats = statsResponse.data as StatsResponse;
+                setStats({
+                    totalBookings: stats.totalBookings || 0,
+                    pendingBookings: bookings.filter(b => b.status === "1").length,
+                    confirmedBookings: bookings.filter(b => b.status === "2").length,
+                    cancelledBookings: bookings.filter(b => b.status === "3").length,
+                });
+            } else {
+                setStats({
+                    totalBookings: 0,
+                    pendingBookings: 0,
+                    confirmedBookings: 0,
+                    cancelledBookings: 0,
+                });
+            }
+        } catch (error: any) {
+            console.error("Error loading booking data:", error);
+            if (error.response?.status === 401 || error.response?.status === 403) {
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+            }
+            setError("Có lỗi xảy ra khi tải dữ liệu");
+            setBookings([]);
+        } finally {
             setLoading(false);
-        }, 1000);
+        }
     };
 
     const handleRefresh = () => {
         setRefreshing(true);
-        setTimeout(() => {
-            loadBookingData();
-            setRefreshing(false);
-        }, 1000);
+        loadBookingData().finally(() => setRefreshing(false));
     };
+
+    // Load data when filters change
+    useEffect(() => {
+        if (!loading) {
+            loadBookingData();
+        }
+    }, [dateFilter, statusFilter]);
 
     // Lọc đặt sân
     const filteredBookings = bookings.filter((booking) => {
@@ -180,33 +243,6 @@ export default function BookingManagement() {
         if (searchTerm && !booking.userName.toLowerCase().includes(searchTerm.toLowerCase()) &&
             !booking.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) &&
             !booking.courtName.toLowerCase().includes(searchTerm.toLowerCase())) {
-            return false;
-        }
-
-        // Filter by date
-        if (dateFilter !== "all") {
-            const today = new Date();
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const bookingDate = new Date(booking.bookingDate);
-
-            if (dateFilter === "today" && format(bookingDate, "yyyy-MM-dd") !== format(today, "yyyy-MM-dd")) {
-                return false;
-            }
-            if (dateFilter === "tomorrow" && format(bookingDate, "yyyy-MM-dd") !== format(tomorrow, "yyyy-MM-dd")) {
-                return false;
-            }
-            if (dateFilter === "week") {
-                const weekFromNow = new Date(today);
-                weekFromNow.setDate(weekFromNow.getDate() + 7);
-                if (bookingDate < today || bookingDate > weekFromNow) {
-                    return false;
-                }
-            }
-        }
-
-        // Filter by status
-        if (statusFilter !== "all" && booking.status !== statusFilter) {
             return false;
         }
 
@@ -238,21 +274,313 @@ export default function BookingManagement() {
     };
 
     const handleConfirmBooking = async (bookingId: number) => {
-        // Simulate API call
-        console.log('Confirming booking:', bookingId);
-        // Update local state
-        setBookings(prev => prev.map(b =>
-            b.id === bookingId ? { ...b, status: "2" } : b
-        ));
+        try {
+            const response = await axios.post(
+                `${API_URL}/bookings/${bookingId}/approve`, 
+                {}, 
+                getAuthHeader()
+            );
+            
+            if (response.status === 200) {
+                loadBookingData(); // Refresh data
+                toast({
+                    title: "Thành công",
+                    description: "Đã xác nhận đặt sân thành công",
+                });
+            }
+        } catch (error) {
+            console.error('Error confirming booking:', error);
+            toast({
+                title: "Lỗi",
+                description: "Có lỗi xảy ra khi xác nhận đặt sân",
+                variant: "destructive",
+            });
+        }
     };
 
     const handleCancelBooking = async (bookingId: number) => {
-        // Simulate API call
-        console.log('Cancelling booking:', bookingId);
-        setBookings(prev => prev.map(b =>
-            b.id === bookingId ? { ...b, status: "3", paymentStatus: "refunded" } : b
-        ));
+        try {
+            // Giả sử có API endpoint để hủy booking
+            // const response = await axios.post(
+            //     `${API_URL}/bookings/${bookingId}/cancel`, 
+            //     {}, 
+            //     getAuthHeader()
+            // );
+            
+            // Tạm thời update local state
+            setBookings(prev => prev.map(b =>
+                b.id === bookingId ? { ...b, status: "3", paymentStatus: "refunded" } : b
+            ));
+            
+            toast({
+                title: "Thành công",
+                description: "Đã hủy đặt sân thành công",
+            });
+        } catch (error) {
+            console.error('Error cancelling booking:', error);
+            toast({
+                title: "Lỗi",
+                description: "Có lỗi xảy ra khi hủy đặt sân",
+                variant: "destructive",
+            });
+        }
     };
+
+    // Mở dialog đặt sân và load dữ liệu cần thiết
+    const handleOpenBookingDialog = () => {
+        setIsBookingDialogOpen(true)
+        loadCourts()
+        // Reset form
+        setBookingFormData({
+            customerName: '',
+            customerPhone: '',
+            customerEmail: '',
+            courtId: 0,
+            timeSlotId: 0,
+            bookingDate: format(new Date().setDate(new Date().getDate() + 1), 'yyyy-MM-dd'),
+            notes: ''
+        })
+    }
+
+    // Load danh sách sân
+    const loadCourts = async () => {
+        try {
+            setLoadingCourts(true)
+            const response = await axios.get(`${API_URL.replace('/admin', '')}/courts`, getAuthHeader())
+            if (response.data && Array.isArray(response.data)) {
+                setCourts(response.data)
+            }
+        } catch (error) {
+            console.error("Error loading courts:", error)
+            toast({
+                title: "Lỗi",
+                description: "Không thể tải danh sách sân",
+                variant: "destructive"
+            })
+        } finally {
+            setLoadingCourts(false)
+        }
+    }
+
+    // Load khung giờ cho sân đã chọn
+    const loadTimeSlots = async (courtId: number) => {
+        if (!courtId) return
+        
+        try {
+            setLoadingTimeSlots(true)
+            const response = await axios.get(
+                `${API_URL.replace('/admin', '')}/time-slots/court/${courtId}`, 
+                getAuthHeader()
+            )
+            if (response.data && Array.isArray(response.data)) {
+                setTimeSlots(response.data)
+                
+                // Nếu đã chọn ngày, kiểm tra tính khả dụng của các khung giờ
+                if (bookingFormData.bookingDate) {
+                    checkAllTimeSlotsAvailability(courtId, bookingFormData.bookingDate, response.data)
+                }
+            }
+        } catch (error) {
+            console.error("Error loading time slots:", error)
+            toast({
+                title: "Lỗi",
+                description: "Không thể tải khung giờ",
+                variant: "destructive"
+            })
+        } finally {
+            setLoadingTimeSlots(false)
+        }
+    }
+    
+    // Kiểm tra tính khả dụng của tất cả khung giờ cho sân và ngày đã chọn
+    const checkAllTimeSlotsAvailability = async (courtId: number, bookingDate: string, slots: any[]) => {
+        if (!courtId || !bookingDate || !slots.length) return
+        
+        try {
+            setLoadingAvailability(true)
+            setAvailableTimeSlots([]) // Reset danh sách khung giờ khả dụng
+            
+            // Tạo mảng các promise để kiểm tra tính khả dụng của từng khung giờ
+            const availabilityPromises = slots.map(slot => 
+                axios.get(
+                    `${API_URL.replace('/admin', '')}/bookings/check-availability?courtId=${courtId}&timeSlotId=${slot.id}&date=${bookingDate}`,
+                    getAuthHeader()
+                )
+            )
+            
+            // Thực hiện tất cả các request song song
+            const results = await Promise.all(availabilityPromises)
+            
+            // Lọc ra các ID khung giờ còn trống
+            const availableSlotIds = results
+                .map((res, index) => {
+                    // Sửa lỗi type bằng cách sử dụng type assertion
+                    const responseData = res.data as { available?: boolean };
+                    if (responseData && responseData.available === true) {
+                        return slots[index].id;
+                    }
+                    return null;
+                })
+                .filter(id => id !== null) as number[]
+            
+            setAvailableTimeSlots(availableSlotIds)
+        } catch (error) {
+            console.error("Error checking time slots availability:", error)
+        } finally {
+            setLoadingAvailability(false)
+        }
+    }
+
+    // Tìm kiếm khách hàng theo số điện thoại hoặc email
+    const searchCustomers = async (query: string) => {
+        if (!query || query.length < 3) return
+        
+        try {
+            setLoadingCustomers(true)
+            const response = await axios.get(
+                `${API_URL}/users/search?query=${encodeURIComponent(query)}`, 
+                getAuthHeader()
+            )
+            if (response.data && Array.isArray(response.data)) {
+                setCustomers(response.data)
+            }
+        } catch (error) {
+            console.error("Error searching customers:", error)
+        } finally {
+            setLoadingCustomers(false)
+        }
+    }
+
+    // Chọn khách hàng từ kết quả tìm kiếm
+    const selectCustomer = (customer: any) => {
+        setBookingFormData(prev => ({
+            ...prev,
+            customerName: customer.fullName || '',
+            customerPhone: customer.phone || '',
+            customerEmail: customer.email || ''
+        }))
+        setCustomers([])
+        setSearchCustomer('')
+    }
+
+    // Xử lý thay đổi sân
+    const handleCourtChange = (courtId: number) => {
+        setBookingFormData(prev => ({ ...prev, courtId, timeSlotId: 0 }))
+        loadTimeSlots(courtId)
+    }
+    
+    // Xử lý thay đổi ngày
+    const handleDateChange = (date: string) => {
+        setBookingFormData(prev => ({ ...prev, bookingDate: date, timeSlotId: 0 }))
+        if (bookingFormData.courtId) {
+            checkAllTimeSlotsAvailability(bookingFormData.courtId, date, timeSlots)
+        }
+    }
+
+    // Kiểm tra khung giờ có khả dụng không
+    const checkTimeSlotAvailability = async () => {
+        const { courtId, timeSlotId, bookingDate } = bookingFormData
+        if (!courtId || !timeSlotId || !bookingDate) return
+        
+        try {
+            const response = await axios.get(
+                `${API_URL.replace('/admin', '')}/bookings/check-availability?courtId=${courtId}&timeSlotId=${timeSlotId}&date=${bookingDate}`,
+                getAuthHeader()
+            )
+            // Kiểm tra response và xác định kiểu dữ liệu
+            if (response.data && typeof response.data === 'object') {
+                // Sử dụng type assertion để tránh lỗi TypeScript
+                const availabilityData = response.data as { available: boolean }
+                return availabilityData.available === true
+            }
+            return false
+        } catch (error) {
+            console.error("Error checking availability:", error)
+            return false
+        }
+    }
+
+    // Tạo đặt sân mới
+    const handleCreateBooking = async () => {
+        const { customerName, customerPhone, customerEmail, courtId, timeSlotId, bookingDate, notes } = bookingFormData
+        
+        // Validate
+        if (!customerName || !customerPhone || !courtId || !timeSlotId || !bookingDate) {
+            toast({
+                title: "Lỗi",
+                description: "Vui lòng điền đầy đủ thông tin bắt buộc",
+                variant: "destructive"
+            })
+            return
+        }
+        
+        // Kiểm tra tính khả dụng
+        const isAvailable = await checkTimeSlotAvailability()
+        if (!isAvailable) {
+            toast({
+                title: "Lỗi",
+                description: "Khung giờ này đã được đặt. Vui lòng chọn khung giờ khác",
+                variant: "destructive"
+            })
+            return
+        }
+        
+        try {
+            // Tạo hoặc lấy user
+            let userId: number | undefined
+            const userResponse = await axios.post(
+                `${API_URL}/users/create-or-find`,
+                { fullName: customerName, email: customerEmail, phone: customerPhone },
+                getAuthHeader()
+            )
+            // Kiểm tra và xác định kiểu dữ liệu response
+            if (userResponse.data && typeof userResponse.data === 'object') {
+                // Sử dụng type assertion để tránh lỗi TypeScript
+                const userData = userResponse.data as { id: number }
+                userId = userData.id
+            }
+            
+            if (!userId) {
+                toast({
+                    title: "Lỗi",
+                    description: "Không thể tạo hoặc tìm người dùng",
+                    variant: "destructive"
+                })
+                return
+            }
+            
+            // Tạo booking
+            const bookingResponse = await axios.post(
+                `${API_URL}/bookings`,
+                {
+                    userId,
+                    courtId,
+                    timeSlotId,
+                    bookingDate,
+                    notes,
+                    isWalkIn: true, // Đánh dấu là đặt sân tại quầy
+                    status: "2" // 2: Đã xác nhận (vì admin đặt trực tiếp)
+                },
+                getAuthHeader()
+            )
+            
+            if (bookingResponse.data) {
+                toast({
+                    title: "Thành công",
+                    description: "Đã tạo đặt sân thành công",
+                })
+                setIsBookingDialogOpen(false)
+                loadBookingData() // Tải lại danh sách đặt sân
+            }
+        } catch (error: any) {
+            console.error("Error creating booking:", error)
+            toast({
+                title: "Lỗi",
+                description: error.response?.data?.message || "Có lỗi xảy ra khi tạo đặt sân",
+                variant: "destructive"
+            })
+        }
+    }
 
     const statsCards = [
         {
@@ -317,7 +645,9 @@ export default function BookingManagement() {
                                 <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                                 {refreshing ? 'Đang tải...' : 'Làm mới'}
                             </Button>
-                            <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200">
+                            <Button 
+                                onClick={handleOpenBookingDialog}
+                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200">
                                 <Plus className="h-4 w-4 mr-2" />
                                 Thêm Đặt Sân
                             </Button>
@@ -438,14 +768,14 @@ export default function BookingManagement() {
                                 <Table>
                                     <TableHeader className="bg-slate-50/50">
                                         <TableRow className="border-slate-200">
-                                            <TableHead className="font-semibold text-slate-700">Mã</TableHead>
+                                            <TableHead className="font-semibold text-slate-700 w-16">STT</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Khách hàng</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Sân tennis</TableHead>
+                                            <TableHead className="font-semibold text-slate-700">Sân cầu lông</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Thời gian</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Số tiền</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
                                             <TableHead className="font-semibold text-slate-700">Thanh toán</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Thao tác</TableHead>
+                                            <TableHead className="font-semibold text-slate-700 text-right">Thao tác</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -456,6 +786,15 @@ export default function BookingManagement() {
                                                         <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
                                                         <span className="text-slate-600">Đang tải dữ liệu...</span>
                                                     </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : error ? (
+                                            <TableRow>
+                                                <TableCell colSpan={8} className="text-center py-12">
+                                                    <p className="text-red-600 mb-4">{error}</p>
+                                                    <Button onClick={loadBookingData} variant="outline">
+                                                        Thử lại
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ) : filteredBookings.length === 0 ? (
@@ -478,7 +817,7 @@ export default function BookingManagement() {
                                                 >
                                                     <TableCell className="font-medium text-slate-900">
                                                         <span className="px-2 py-1 bg-slate-100 rounded-md text-sm">
-                                                            #{booking.id}
+                                                            #{index + 1}
                                                         </span>
                                                     </TableCell>
                                                     <TableCell>
@@ -543,11 +882,12 @@ export default function BookingManagement() {
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <div className="flex space-x-1">
+                                                        <div className="flex space-x-1 justify-end">
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
                                                                 className="hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200"
+                                                                onClick={() => window.location.href = `/admin/bookings/${booking.id}/detail`}
                                                             >
                                                                 <Eye className="h-3 w-3" />
                                                             </Button>
@@ -589,6 +929,209 @@ export default function BookingManagement() {
                     </Card>
                 </div>
             </div>
+
+            {/* Dialog đặt sân tại quầy */}
+            <Dialog open={isBookingDialogOpen} onOpenChange={setIsBookingDialogOpen}>
+                <DialogContent className="sm:max-w-[700px]">
+                    <DialogHeader>
+                        <DialogTitle>Đặt Sân Tại Quầy</DialogTitle>
+                        <DialogDescription>
+                            Nhập thông tin khách hàng và chi tiết đặt sân
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-6 py-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Thông tin khách hàng */}
+                            <div className="space-y-2">
+                                <Label htmlFor="customerSearch">Tìm khách hàng</Label>
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <Input
+                                        id="customerSearch"
+                                        placeholder="Tìm theo SĐT hoặc email"
+                                        value={searchCustomer}
+                                        onChange={(e) => {
+                                            setSearchCustomer(e.target.value)
+                                            if (e.target.value.length >= 3) {
+                                                searchCustomers(e.target.value)
+                                            }
+                                        }}
+                                        className="pl-10"
+                                    />
+                                    {loadingCustomers && (
+                                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                            <RefreshCw className="h-4 w-4 animate-spin text-slate-400" />
+                                        </div>
+                                    )}
+                                </div>
+                                {customers.length > 0 && (
+                                    <div className="bg-white shadow-lg rounded-md border p-2 mt-1 max-h-32 overflow-y-auto">
+                                        {customers.map((customer, index) => (
+                                            <div
+                                                key={index}
+                                                className="p-2 hover:bg-slate-50 cursor-pointer rounded-sm"
+                                                onClick={() => selectCustomer(customer)}
+                                            >
+                                                <p className="font-medium">{customer.fullName}</p>
+                                                <div className="text-xs text-slate-500 flex items-center gap-2">
+                                                    <span className="flex items-center">
+                                                        <Phone className="h-3 w-3 mr-1" />
+                                                        {customer.phone || 'N/A'}
+                                                    </span>
+                                                    <span className="flex items-center">
+                                                        <Mail className="h-3 w-3 mr-1" />
+                                                        {customer.email || 'N/A'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="customerName">Tên khách hàng *</Label>
+                                    <Input
+                                        id="customerName"
+                                        value={bookingFormData.customerName}
+                                        onChange={(e) => setBookingFormData(prev => ({ ...prev, customerName: e.target.value }))}
+                                        placeholder="Nhập tên khách hàng"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="customerPhone">Số điện thoại *</Label>
+                                        <Input
+                                            id="customerPhone"
+                                            value={bookingFormData.customerPhone}
+                                            onChange={(e) => setBookingFormData(prev => ({ ...prev, customerPhone: e.target.value }))}
+                                            placeholder="Nhập số điện thoại"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="customerEmail">Email</Label>
+                                        <Input
+                                            id="customerEmail"
+                                            value={bookingFormData.customerEmail}
+                                            onChange={(e) => setBookingFormData(prev => ({ ...prev, customerEmail: e.target.value }))}
+                                            placeholder="Nhập email"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Thông tin đặt sân */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="court">Chọn sân *</Label>
+                                <Select
+                                    value={bookingFormData.courtId.toString()}
+                                    onValueChange={(value) => handleCourtChange(parseInt(value))}
+                                >
+                                    <SelectTrigger id="court" className={loadingCourts ? 'opacity-70' : ''}>
+                                        <SelectValue placeholder="Chọn sân cầu lông" />
+                                        {loadingCourts && (
+                                            <RefreshCw className="h-4 w-4 animate-spin ml-2 text-slate-400" />
+                                        )}
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="0" disabled>Chọn sân</SelectItem>
+                                        {courts.map((court) => (
+                                            <SelectItem key={court.id} value={court.id.toString()}>
+                                                {court.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="bookingDate">Ngày đặt *</Label>
+                                <Input
+                                    id="bookingDate"
+                                    type="date"
+                                    value={bookingFormData.bookingDate}
+                                    onChange={(e) => handleDateChange(e.target.value)}
+                                    min={format(new Date(), 'yyyy-MM-dd')}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <Label htmlFor="timeSlot">Khung giờ *</Label>
+                                {loadingAvailability && (
+                                    <div className="flex items-center text-xs text-slate-500">
+                                        <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                                        Đang kiểm tra tính khả dụng...
+                                    </div>
+                                )}
+                            </div>
+                            <Select
+                                value={bookingFormData.timeSlotId.toString()}
+                                onValueChange={(value) => setBookingFormData(prev => ({ ...prev, timeSlotId: parseInt(value) }))}
+                                disabled={!bookingFormData.courtId || loadingTimeSlots || loadingAvailability}
+                            >
+                                <SelectTrigger id="timeSlot" className={loadingTimeSlots ? 'opacity-70' : ''}>
+                                    <SelectValue placeholder="Chọn khung giờ" />
+                                    {loadingTimeSlots && (
+                                        <RefreshCw className="h-4 w-4 animate-spin ml-2 text-slate-400" />
+                                    )}
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="0" disabled>Chọn khung giờ</SelectItem>
+                                    {timeSlots.map((slot) => {
+                                        const isAvailable = availableTimeSlots.includes(slot.id);
+                                        return (
+                                            <SelectItem 
+                                                key={slot.id} 
+                                                value={slot.id.toString()} 
+                                                disabled={!isAvailable}
+                                                className={!isAvailable ? 'opacity-50' : ''}
+                                            >
+                                                <div className="flex items-center justify-between w-full">
+                                                    <span>{slot.startTime} - {slot.endTime} | {slot.price?.toLocaleString('vi-VN')} VNĐ</span>
+                                                    {isAvailable ? (
+                                                        <Badge className="ml-2 bg-green-100 text-green-800 border-green-200">
+                                                            Còn trống
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge className="ml-2 bg-red-100 text-red-800 border-red-200">
+                                                            Đã đặt
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </SelectItem>
+                                        );
+                                    })}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="notes">Ghi chú</Label>
+                            <Textarea
+                                id="notes"
+                                value={bookingFormData.notes}
+                                onChange={(e) => setBookingFormData(prev => ({ ...prev, notes: e.target.value }))}
+                                placeholder="Thêm ghi chú cho đặt sân (nếu có)"
+                                rows={3}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsBookingDialogOpen(false)}>
+                            Hủy
+                        </Button>
+                        <Button onClick={handleCreateBooking} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                            Tạo Đặt Sân
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AdminLayout>
     )
 }

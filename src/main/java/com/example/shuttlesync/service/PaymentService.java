@@ -21,6 +21,8 @@ public interface PaymentService {
     
     Payment createPayment(Integer bookingId, BigDecimal amount, String paymentMethod);
     
+    Payment createPayment(Integer bookingId, Integer invoiceId, BigDecimal amount, String paymentMethod);
+    
     Payment updatePaymentStatus(Integer paymentId, Byte newStatusId, User changedBy);
     
     Payment addDiscountToPayment(Integer paymentId, Integer discountId);
