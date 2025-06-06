@@ -1,58 +1,380 @@
 package com.example.shuttlesync.service.impl;
 
-import com.example.shuttlesync.dto.BookingDto;
-import com.example.shuttlesync.exeption.BadRequestException;
+import com.example.shuttlesync.dto.BookingDTO;
 import com.example.shuttlesync.exeption.ResourceNotFoundException;
-import com.example.shuttlesync.model.Booking;
-import com.example.shuttlesync.model.Court;
-import com.example.shuttlesync.model.TimeSlot;
-import com.example.shuttlesync.model.User;
-import com.example.shuttlesync.repository.BookingRepository;
-import com.example.shuttlesync.repository.CourtRepository;
-import com.example.shuttlesync.repository.TimeSlotRepository;
-import com.example.shuttlesync.repository.UserRepository;
+import com.example.shuttlesync.model.*;
+import com.example.shuttlesync.repository.*;
 import com.example.shuttlesync.service.BookingService;
+import com.example.shuttlesync.service.NotificationService;
+import com.example.shuttlesync.service.SystemChangeLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class BookingServiceImpl implements BookingService {
-
+    
     private final BookingRepository bookingRepository;
-    private final UserRepository userRepository;
-    private final CourtRepository courtRepository;
     private final TimeSlotRepository timeSlotRepository;
-
+    private final CourtRepository courtRepository;
+    private final UserRepository userRepository;
+    private final PaymentRepository paymentRepository;
+    private final SystemConfigRepository systemConfigRepository;
+    private final DiscountRepository discountRepository;
+    private final CustomerBookingInfoRepository customerBookingInfoRepository;
+    private final NotificationService notificationService;
+    private final SystemChangeLogService systemChangeLogService;
+    private final BookingStatusTypeRepository bookingStatusTypeRepository;
+    private final NotificationRepository notificationRepository;
+    private final SystemChangeLogRepository systemChangeLogRepository;
+    
     @Override
     public List<Booking> getAllBookings() {
         return bookingRepository.findAll();
     }
-
+    
     @Override
-    public Booking getBookingById(Integer id) {
-        return bookingRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân với ID: " + id));
+    public Optional<Booking> getBookingById(Integer id) {
+        return bookingRepository.findById(id);
     }
-
+    
     @Override
-    public List<Booking> getBookingsByUser(Integer userId) {
+    public List<Booking> getBookingsByUserId(Integer userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-
+        
         return bookingRepository.findByUser(user);
     }
-
+    
     @Override
-    public List<Booking> getBookingsByUserAndStatus(Integer userId, String status) {
+    public List<Booking> getBookingsByStatus(Byte statusId) {
+        BookingStatusType status = bookingStatusTypeRepository.findById(statusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái đặt sân với ID: " + statusId));
+        
+        return bookingRepository.findByStatusId(statusId);
+    }
+    
+    @Transactional
+    @Override
+    public Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate, Set<Integer> discountIds) {
+        // Lấy thông tin người dùng
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-
-        return bookingRepository.findByUserAndStatus(user, status);
+        
+        // Lấy thông tin sân
+        Court court = courtRepository.findById(courtId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân với ID: " + courtId));
+        
+        // Lấy thông tin khung giờ
+        TimeSlot timeSlot = timeSlotRepository.findById(timeSlotId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khung giờ với ID: " + timeSlotId));
+        
+        // Kiểm tra xem khung giờ và sân có khớp nhau không
+        if (!timeSlot.getCourt().getId().equals(court.getId())) {
+            throw new IllegalArgumentException("Khung giờ không thuộc sân này");
+        }
+        
+        // Kiểm tra xem khung giờ đã được đặt chưa
+        if (isTimeSlotBooked(courtId, timeSlotId, bookingDate)) {
+            throw new IllegalArgumentException("Khung giờ này đã được đặt cho ngày " + bookingDate);
+        }
+        
+        // Lấy trạng thái "Chờ xác nhận" (ID = 1)
+        BookingStatusType waitingStatus = bookingStatusTypeRepository.findById((byte)1)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Chờ xác nhận'"));
+        
+        // Tạo booking mới
+        Booking booking = new Booking();
+        booking.setUser(user);
+        booking.setCourt(court);
+        booking.setTimeSlot(timeSlot);
+        booking.setBookingDate(bookingDate);
+        booking.setStatus(waitingStatus);
+        booking.setCreatedAt(LocalDateTime.now());
+        
+        // Thêm các discount nếu có
+        if (discountIds != null && !discountIds.isEmpty()) {
+            Set<Discount> discounts = new HashSet<>();
+            for (Integer discountId : discountIds) {
+                Discount discount = discountRepository.findById(discountId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy mã giảm giá với ID: " + discountId));
+                
+                // Kiểm tra xem discount có còn hiệu lực không
+                LocalDate today = LocalDate.now();
+                if (today.isAfter(discount.getValidFrom()) && 
+                    (discount.getValidTo() == null || today.isBefore(discount.getValidTo()))) {
+                    discounts.add(discount);
+                }
+            }
+            booking.setDiscounts(discounts);
+        }
+        
+        // Lưu booking
+        Booking savedBooking = bookingRepository.save(booking);
+        
+        // Tạo thông báo cho admin
+        List<User> admins = userRepository.findByRole("admin");
+        for (User admin : admins) {
+            Notification notification = new Notification();
+            notification.setUser(admin);
+            notification.setMessage("Có đặt sân mới từ " + user.getFullName() + " đang chờ xác nhận");
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+        
+        // Tạo thông báo cho người dùng
+        Notification userNotification = new Notification();
+        userNotification.setUser(user);
+        userNotification.setMessage("Đặt sân của bạn đang chờ xác nhận");
+        userNotification.setIsRead(false);
+        notificationRepository.save(userNotification);
+        
+        // Ghi log thay đổi
+        SystemChangeLog log = new SystemChangeLog();
+        log.setTableName("Bookings");
+        log.setRecordId(savedBooking.getId());
+        log.setChangeType("INSERT");
+        log.setChangedFields(String.format(
+                "{\"UserId\":\"%d\",\"CourtId\":\"%d\",\"TimeSlotId\":\"%d\",\"BookingDate\":\"%s\"}",
+                userId, courtId, timeSlotId, bookingDate));
+        log.setChangedBy(user);
+        systemChangeLogRepository.save(log);
+        
+        return savedBooking;
+    }
+    
+    @Transactional
+    @Override
+    public Booking updateBookingStatus(Integer bookingId, Byte newStatusId, User changedBy) {
+        // Lấy thông tin booking
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đặt sân với ID: " + bookingId));
+        
+        // Lấy thông tin trạng thái mới
+        BookingStatusType newStatus = bookingStatusTypeRepository.findById(newStatusId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái với ID: " + newStatusId));
+        
+        // Lưu trạng thái cũ để so sánh
+        BookingStatusType oldStatus = booking.getStatus();
+        
+        // Cập nhật trạng thái booking
+        booking.setStatus(newStatus);
+        Booking updatedBooking = bookingRepository.save(booking);
+        
+        // Ghi log thay đổi
+        SystemChangeLog log = new SystemChangeLog();
+        log.setTableName("Bookings");
+        log.setRecordId(bookingId);
+        log.setChangeType("UPDATE");
+        log.setChangedFields(String.format(
+                "{\"Status\":{\"from\":\"%d\",\"to\":\"%d\"}}",
+                oldStatus.getId(), newStatusId));
+        log.setChangedBy(changedBy);
+        systemChangeLogRepository.save(log);
+        
+        // Tạo thanh toán nếu trạng thái là "Đã xác nhận" (ID = 2)
+        if (newStatusId == 2 && !oldStatus.getId().equals(newStatusId)) {
+            Payment payment = new Payment();
+            payment.setBooking(booking);
+            payment.setAmount(booking.getTimeSlot().getPrice());
+            payment.setPaymentMethod("Chưa chọn");
+            payment.setPaymentStatus(new PaymentStatusType((byte)1, "Chưa thanh toán", null)); // ID = 1 cho "Chưa thanh toán"
+            payment.setCreatedAt(LocalDateTime.now());
+            paymentRepository.save(payment);
+            
+            // Thông báo cho người dùng
+            Notification notification = new Notification();
+            notification.setUser(booking.getUser());
+            notification.setMessage("Đặt sân của bạn đã được xác nhận. Vui lòng tiến hành thanh toán.");
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+        
+        // Nếu trạng thái là "Đã hủy" (ID = 3)
+        if (newStatusId == 3 && !oldStatus.getId().equals(newStatusId)) {
+            // Thông báo cho người dùng
+            Notification notification = new Notification();
+            notification.setUser(booking.getUser());
+            notification.setMessage("Đặt sân của bạn đã bị hủy.");
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+        
+        return updatedBooking;
+    }
+    
+    @Transactional
+    @Override
+    public void cancelBooking(Integer bookingId, User user) {
+        // Lấy thông tin booking
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đặt sân với ID: " + bookingId));
+        
+        // Kiểm tra xem người dùng có quyền hủy booking hay không
+        if (!booking.getUser().getId().equals(user.getId()) && !"admin".equals(user.getRole())) {
+            throw new IllegalArgumentException("Bạn không có quyền hủy đặt sân này");
+        }
+        
+        // Lấy trạng thái "Đã hủy" (ID = 3)
+        BookingStatusType cancelledStatus = bookingStatusTypeRepository.findById((byte)3)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Đã hủy'"));
+        
+        // Lưu trạng thái cũ để ghi log
+        BookingStatusType oldStatus = booking.getStatus();
+        
+        // Cập nhật trạng thái booking
+        booking.setStatus(cancelledStatus);
+        bookingRepository.save(booking);
+        
+        // Ghi log thay đổi
+        SystemChangeLog log = new SystemChangeLog();
+        log.setTableName("Bookings");
+        log.setRecordId(bookingId);
+        log.setChangeType("UPDATE");
+        log.setChangedFields(String.format(
+                "{\"Status\":{\"from\":\"%d\",\"to\":\"3\"}}",
+                oldStatus.getId()));
+        log.setChangedBy(user);
+        systemChangeLogRepository.save(log);
+        
+        // Thông báo cho người dùng (nếu admin hủy)
+        if (!"admin".equals(user.getRole())) {
+            Notification notification = new Notification();
+            notification.setUser(booking.getUser());
+            notification.setMessage("Đặt sân của bạn đã bị hủy bởi quản trị viên.");
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+        
+        // Thông báo cho admin (nếu người dùng hủy)
+        if (booking.getUser().getId().equals(user.getId())) {
+            List<User> admins = userRepository.findByRole("admin");
+            for (User admin : admins) {
+                Notification notification = new Notification();
+                notification.setUser(admin);
+                notification.setMessage("Đặt sân của " + booking.getUser().getFullName() + " đã bị hủy bởi người dùng.");
+                notification.setIsRead(false);
+                notificationRepository.save(notification);
+            }
+        }
+    }
+    
+    private void createPaymentForBooking(Booking booking) {
+        // Kiểm tra nếu đã có payment
+        if (!paymentRepository.findByBookingId(booking.getId()).isEmpty()) {
+            return;
+        }
+        
+        // Lấy giá từ TimeSlot
+        BigDecimal amount = booking.getTimeSlot().getPrice();
+        
+        // Áp dụng giảm giá nếu có
+        if (booking.getDiscounts() != null && !booking.getDiscounts().isEmpty()) {
+            BigDecimal discountPercent = BigDecimal.ZERO;
+            for (Discount discount : booking.getDiscounts()) {
+                discountPercent = discountPercent.add(new BigDecimal(discount.getDiscountPercent()));
+            }
+            
+            // Tổng giảm giá tối đa 100%
+            if (discountPercent.compareTo(new BigDecimal(100)) > 0) {
+                discountPercent = new BigDecimal(100);
+            }
+            
+            // Tính số tiền giảm
+            BigDecimal discountAmount = amount.multiply(discountPercent).divide(new BigDecimal(100));
+            amount = amount.subtract(discountAmount);
+        }
+        
+        // Tạo payment mới
+        Payment payment = new Payment();
+        payment.setBooking(booking);
+        payment.setAmount(amount);
+        payment.setPaymentMethod("Chưa chọn");
+        
+        PaymentStatusType unpaidStatus = new PaymentStatusType();
+        unpaidStatus.setId((byte) 1); // 1: Chưa thanh toán
+        payment.setPaymentStatus(unpaidStatus);
+        
+        paymentRepository.save(payment);
+    }
+    
+    private void updateCustomerBookingInfo(Booking booking) {
+        CustomerBookingInfo bookingInfo = customerBookingInfoRepository.findById(booking.getId())
+                .orElse(new CustomerBookingInfo());
+        
+        bookingInfo.setBookingId(booking.getId());
+        bookingInfo.setBooking(booking);
+        bookingInfo.setUserFullName(booking.getUser().getFullName());
+        bookingInfo.setUserEmail(booking.getUser().getEmail());
+        bookingInfo.setCourtName(booking.getCourt().getName());
+        bookingInfo.setBookingDate(booking.getBookingDate());
+        bookingInfo.setSlotStartTime(booking.getTimeSlot().getStartTime());
+        bookingInfo.setSlotEndTime(booking.getTimeSlot().getEndTime());
+        bookingInfo.setOriginalPrice(booking.getTimeSlot().getPrice());
+        bookingInfo.setBookingStatus(booking.getStatus().getName());
+        
+        // Lấy thông tin thanh toán nếu có
+        List<Payment> payments = paymentRepository.findByBookingId(booking.getId());
+        if (!payments.isEmpty()) {
+            Payment latestPayment = payments.get(0);
+            bookingInfo.setPaymentAmount(latestPayment.getAmount());
+            bookingInfo.setPaymentMethod(latestPayment.getPaymentMethod());
+            bookingInfo.setPaymentStatus(latestPayment.getPaymentStatus().getName());
+        }
+        
+        customerBookingInfoRepository.save(bookingInfo);
+    }
+    
+    private void notifyBookingCreated(Booking booking) {
+        // Thông báo cho khách hàng
+        String userMessage = "Bạn đã đặt sân #" + booking.getId() + " thành công. ";
+        if (isBookingConfirmationRequired()) {
+            userMessage += "Vui lòng chờ xác nhận từ quản trị viên.";
+        } else {
+            userMessage += "Vui lòng tiến hành thanh toán.";
+        }
+        notificationService.sendNotification(booking.getUser().getId(), userMessage);
+        
+        // Thông báo cho admin nếu cần xác nhận
+        if (isBookingConfirmationRequired()) {
+            List<User> admins = userRepository.findByRole("admin");
+            for (User admin : admins) {
+                notificationService.sendNotification(admin.getId(),
+                        "Có yêu cầu đặt sân mới #" + booking.getId() + " từ khách hàng " + booking.getUser().getFullName());
+            }
+        }
+    }
+    
+    private boolean isBookingConfirmationRequired() {
+        return systemConfigRepository.findByConfigKey("BOOKING_CONFIRMATION_REQUIRED")
+                .map(config -> Boolean.parseBoolean(config.getConfigValue()))
+                .orElse(true); // Mặc định là yêu cầu xác nhận
+    }
+    
+    private int getMinBookingHoursInAdvance() {
+        return systemConfigRepository.findByConfigKey("MIN_BOOKING_HOURS_IN_ADVANCE")
+                .map(config -> Integer.parseInt(config.getConfigValue()))
+                .orElse(2); // Mặc định là 2 giờ
+    }
+    
+    @Override
+    public boolean isTimeSlotBooked(Integer courtId, Integer timeSlotId, LocalDate date) {
+        return bookingRepository.existsByCourtIdAndTimeSlotIdAndBookingDateAndStatusIdNot(
+            courtId, 
+            timeSlotId, 
+            date,
+            (byte)3 // ID cho trạng thái "Đã hủy"
+        );
     }
 
     @Override
@@ -71,58 +393,38 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional
-    public Booking createBooking(BookingDto bookingDto) {
-        User user = userRepository.findById(bookingDto.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + bookingDto.getUserId()));
-
-        Court court = courtRepository.findById(bookingDto.getCourtId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân với ID: " + bookingDto.getCourtId()));
-
-        TimeSlot timeSlot = timeSlotRepository.findById(bookingDto.getTimeSlotId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khung giờ với ID: " + bookingDto.getTimeSlotId()));
-
-        // Kiểm tra xem khung giờ đã được đặt chưa
-        boolean isBooked = bookingRepository.existsByCourtAndBookingDateAndTimeSlotAndStatusNot(
-                court, bookingDto.getBookingDate(), timeSlot, "cancelled");
-
-        if (isBooked) {
-            throw new BadRequestException("Khung giờ này đã được đặt");
-        }
-
-        Booking booking = new Booking();
-        booking.setUser(user);
-        booking.setCourt(court);
-        booking.setBookingDate(bookingDto.getBookingDate());
-        booking.setTimeSlot(timeSlot);
-        booking.setStatus("pending");
-
-        return bookingRepository.save(booking);
-    }
-
-    @Override
-    @Transactional
-    public Booking updateBookingStatus(Integer id, String status) {
-        Booking booking = getBookingById(id);
-
-        if (!status.equals("pending") && !status.equals("confirmed") && !status.equals("cancelled")) {
-            throw new BadRequestException("Trạng thái không hợp lệ. Chỉ chấp nhận: pending, confirmed, cancelled");
-        }
-
-        booking.setStatus(status);
-
-        return bookingRepository.save(booking);
-    }
-
-    @Override
-    @Transactional
-    public void deleteBooking(Integer id) {
-        Booking booking = getBookingById(id);
-        bookingRepository.delete(booking);
-    }
-
-    @Override
     public Long countConfirmedBookingsByUser(Integer userId) {
         return bookingRepository.countConfirmedBookingsByUser(userId);
     }
-}
+
+    @Override
+    public List<Booking> getActiveBookingsByCourtAndDate(Integer courtId, LocalDate date) {
+        return bookingRepository.findActiveBookingsByCourtAndDate(courtId, date);
+    }
+
+    @Override
+    public Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate) {
+        return createBooking(userId, courtId, timeSlotId, bookingDate, null);
+    }
+
+    @Override
+    public List<BookingDTO> getRecentBookings() {
+        List<Booking> bookings = bookingRepository.findFirst10ByOrderByCreatedAtDesc();
+        return bookings.stream()
+                .limit(10)
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    private BookingDTO convertToDTO(Booking booking) {
+        BookingDTO dto = new BookingDTO();
+        dto.setId(booking.getId());
+        dto.setUserName(booking.getUser().getFullName());
+        dto.setCourtName(booking.getCourt().getName());
+        dto.setBookingDate(booking.getBookingDate());
+        dto.setStartTime(booking.getTimeSlot().getStartTime().toString());
+        dto.setEndTime(booking.getTimeSlot().getEndTime().toString());
+        dto.setStatus(booking.getStatus().getId().toString());
+        return dto;
+    }
+} 

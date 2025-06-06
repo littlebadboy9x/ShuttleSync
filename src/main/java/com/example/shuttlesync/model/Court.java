@@ -16,10 +16,10 @@ public class Court {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "Name")
+    @Column(name = "Name", nullable = false, length = 50)
     private String name;
 
-    @Column(name = "Description")
+    @Column(name = "Description", length = 255)
     private String description;
 
     @ManyToOne
@@ -27,5 +27,5 @@ public class Court {
     private StatusType status;
 
     @Column(name = "HasFixedTimeSlots")
-    private Boolean hasFixedTimeSlots;
+    private Boolean hasFixedTimeSlots = true;
 }

@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "Payments")
@@ -19,25 +21,33 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @OneToOne
-    @JoinColumn(name = "BookingId")
+    @ManyToOne
+    @JoinColumn(name = "BookingId", nullable = false)
     private Booking booking;
 
-    @Column(name = "Amount")
+    @ManyToOne
+    @JoinColumn(name = "InvoiceId")
+    private Invoice invoice;
+
+    @Column(name = "Amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "PaymentMethod")
+    @Column(name = "PaymentMethod", length = 50)
     private String paymentMethod;
 
-    @Column(name = "PaymentStatus")
-    private String paymentStatus; // 'Đã thanh toán' hoặc 'Chưa thanh toán'
+    @ManyToOne
+    @JoinColumn(name = "PaymentStatus", nullable = false)
+    private PaymentStatusType paymentStatus;
 
     @Column(name = "CreatedAt")
     private LocalDateTime createdAt;
 
     @Column(name = "PaidAt")
     private LocalDateTime paidAt;
-    
+
+    @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<PaymentDiscount> paymentDiscounts = new HashSet<>();
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

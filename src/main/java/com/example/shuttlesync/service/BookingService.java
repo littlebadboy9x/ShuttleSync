@@ -1,31 +1,43 @@
 package com.example.shuttlesync.service;
-import com.example.shuttlesync.dto.BookingDto;
+
 import com.example.shuttlesync.model.Booking;
+import com.example.shuttlesync.model.User;
+import com.example.shuttlesync.dto.BookingDTO;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 public interface BookingService {
-
+    
     List<Booking> getAllBookings();
-
-    Booking getBookingById(Integer id);
-
-    List<Booking> getBookingsByUser(Integer userId);
-
-    List<Booking> getBookingsByUserAndStatus(Integer userId, String status);
-
+    
+    Optional<Booking> getBookingById(Integer id);
+    
+    List<Booking> getBookingsByUserId(Integer userId);
+    
+    List<Booking> getBookingsByStatus(Byte statusId);
+    
+    Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate);
+    
+    Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate, Set<Integer> discountIds);
+    
+    Booking updateBookingStatus(Integer bookingId, Byte newStatusId, User changedBy);
+    
+    void cancelBooking(Integer bookingId, User user);
+    
     List<Booking> getBookingsByDate(LocalDate date);
-
+    
     List<Booking> getBookingsBetweenDates(LocalDate startDate, LocalDate endDate);
-
+    
     List<Booking> getBookingsByCourtAndDate(Integer courtId, LocalDate date);
-
-    Booking createBooking(BookingDto bookingDto);
-
-    Booking updateBookingStatus(Integer id, String status);
-
-    void deleteBooking(Integer id);
-
+    
     Long countConfirmedBookingsByUser(Integer userId);
+    
+    List<Booking> getActiveBookingsByCourtAndDate(Integer courtId, LocalDate date);
+    
+    boolean isTimeSlotBooked(Integer courtId, Integer timeSlotId, LocalDate bookingDate);
+
+    List<BookingDTO> getRecentBookings();
 }

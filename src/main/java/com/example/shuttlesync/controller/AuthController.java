@@ -3,16 +3,15 @@ package com.example.shuttlesync.controller;
 import com.example.shuttlesync.dto.AuthRequest;
 import com.example.shuttlesync.dto.AuthResponse;
 import com.example.shuttlesync.dto.UserDto;
-import com.example.shuttlesync.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.example.shuttlesync.service.AuthService;
 
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", maxAge = 3600)
 public class AuthController {
 
     private final AuthService authService;
