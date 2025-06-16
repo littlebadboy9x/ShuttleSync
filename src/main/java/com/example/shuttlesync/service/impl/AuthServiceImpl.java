@@ -38,13 +38,22 @@ public class AuthServiceImpl implements AuthService {
         String jwt = jwtService.generateToken(userDetails);
         String refreshToken = jwtService.generateRefreshToken(userDetails);
 
+        String role = userDetails.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "").toLowerCase();
+
         return AuthResponse.builder()
                 .token(jwt)
+                .accessToken(jwt)
                 .refreshToken(refreshToken)
                 .id(userDetails.getId())
                 .email(userDetails.getUsername())
                 .fullName(userDetails.getFullName())
-                .role(userDetails.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "").toLowerCase())
+                .role(role)
+                .user(AuthResponse.UserInfo.builder()
+                        .id(userDetails.getId())
+                        .email(userDetails.getUsername())
+                        .fullName(userDetails.getFullName())
+                        .role(role)
+                        .build())
                 .build();
     }
 
@@ -80,13 +89,22 @@ public class AuthServiceImpl implements AuthService {
             String newToken = jwtService.generateToken(userDetails);
             String newRefreshToken = jwtService.generateRefreshToken(userDetails);
 
+            String role = userDetails.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "").toLowerCase();
+
             return AuthResponse.builder()
                     .token(newToken)
+                    .accessToken(newToken)
                     .refreshToken(newRefreshToken)
                     .id(userDetails.getId())
                     .email(userDetails.getUsername())
                     .fullName(userDetails.getFullName())
-                    .role(userDetails.getAuthorities().iterator().next().getAuthority().replace("ROLE_", "").toLowerCase())
+                    .role(role)
+                    .user(AuthResponse.UserInfo.builder()
+                            .id(userDetails.getId())
+                            .email(userDetails.getUsername())
+                            .fullName(userDetails.getFullName())
+                            .role(role)
+                            .build())
                     .build();
         }
 

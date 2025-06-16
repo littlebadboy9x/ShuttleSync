@@ -127,14 +127,47 @@ public class BookingController {
     }
 
     @PostMapping("/admin/bookings/{id}/approve")
-    public ResponseEntity<BookingDTO> confirmBooking(@PathVariable Integer id) {
+    public ResponseEntity<Map<String, Object>> confirmBooking(@PathVariable Integer id) {
         try {
             // Xác nhận booking bằng cách set status = 2 (Đã xác nhận)
             Booking updatedBooking = bookingService.updateBookingStatus(id, (byte) 2, null);
-            return ResponseEntity.ok(convertToDTO(updatedBooking));
+            logger.info("Booking confirmed with ID: " + id);
+            
+            // Tự động tạo hóa đơn cho booking đã xác nhận
+            Invoice invoice = null;
+            try {
+                // Kiểm tra xem đã có hóa đơn chưa
+                invoice = invoiceService.getInvoiceByBookingId(id);
+                if (invoice == null) {
+                    invoice = invoiceService.createInvoice(id);
+                    logger.info("Automatically created invoice with ID: " + invoice.getId() + " for confirmed booking: " + id);
+                } else {
+                    logger.info("Invoice already exists for booking: " + id + ", invoice ID: " + invoice.getId());
+                }
+            } catch (Exception e) {
+                logger.warning("Error creating invoice for booking ID: " + id + ": " + e.getMessage());
+                // Tiếp tục xử lý ngay cả khi tạo hóa đơn thất bại
+            }
+            
+            // Trả về thông tin booking và hóa đơn
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Booking đã được xác nhận thành công");
+            response.put("booking", convertToDTO(updatedBooking));
+            if (invoice != null) {
+                response.put("invoiceId", invoice.getId());
+                response.put("invoiceCreated", true);
+            } else {
+                response.put("invoiceCreated", false);
+            }
+            
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.severe("Error confirming booking: " + e.getMessage());
-            return ResponseEntity.badRequest().build();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Lỗi khi xác nhận booking: " + e.getMessage());
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 

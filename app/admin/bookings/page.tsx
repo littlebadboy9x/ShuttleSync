@@ -75,7 +75,7 @@ interface StatsResponse {
     totalRevenue?: number;
 }
 
-const API_URL = 'http://localhost:8080/api/admin';
+const API_URL = 'http://localhost:8080/api';
 
 const getAuthHeader = () => {
     const userStr = localStorage.getItem('user');
@@ -165,12 +165,12 @@ export default function BookingManagement() {
             if (statusFilter !== "all") params.append("statusFilter", statusFilter);
             
             const bookingsResponse = await axios.get(
-                `${API_URL}/bookings/all?${params.toString()}`, 
+                `${API_URL}/admin/bookings/all?${params.toString()}`, 
                 getAuthHeader()
             );
             
             // Load stats
-            const statsResponse = await axios.get(`${API_URL}/bookings/stats`, getAuthHeader());
+            const statsResponse = await axios.get(`${API_URL}/admin/bookings/stats`, getAuthHeader());
             
             if (bookingsResponse.data && Array.isArray(bookingsResponse.data)) {
                 // Map backend data to frontend format với trạng thái thanh toán từ hóa đơn
@@ -275,24 +275,33 @@ export default function BookingManagement() {
 
     const handleConfirmBooking = async (bookingId: number) => {
         try {
+            console.log('Confirming booking:', bookingId);
             const response = await axios.post(
-                `${API_URL}/bookings/${bookingId}/approve`, 
+                `${API_URL}/admin/bookings/${bookingId}/approve`, 
                 {}, 
                 getAuthHeader()
             );
             
-            if (response.status === 200) {
+            console.log('Approve response:', response);
+            
+            if (response.status === 200 && response.data?.success) {
+                const responseData = response.data as { success: boolean; invoiceCreated?: boolean; invoiceId?: number };
+                const { invoiceCreated, invoiceId } = responseData;
+                
                 loadBookingData(); // Refresh data
                 toast({
                     title: "Thành công",
-                    description: "Đã xác nhận đặt sân thành công",
+                    description: invoiceCreated 
+                        ? `Đã xác nhận đặt sân và tạo hóa đơn #${invoiceId} thành công`
+                        : "Đã xác nhận đặt sân thành công",
                 });
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error confirming booking:', error);
+            console.error('Error details:', error.response?.data);
             toast({
                 title: "Lỗi",
-                description: "Có lỗi xảy ra khi xác nhận đặt sân",
+                description: `Có lỗi xảy ra khi xác nhận đặt sân: ${error.response?.data?.message || error.message}`,
                 variant: "destructive",
             });
         }

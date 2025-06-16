@@ -84,7 +84,8 @@ public class AdminDashboardController {
         stats.setTotalUsers(userService.getAllUsers().size());
         
         // Tổng doanh thu
-        stats.setTotalRevenue(paymentService.getTotalPaidAmount());
+        java.math.BigDecimal totalRevenue = paymentService.getTotalPaidAmount();
+        stats.setTotalRevenue(totalRevenue != null ? totalRevenue.doubleValue() : 0.0);
 
         return ResponseEntity.ok(stats);
     }

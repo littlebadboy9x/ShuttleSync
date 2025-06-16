@@ -6,21 +6,22 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
-@EnableWebMvc
 public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins("http://localhost:3000")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .allowedOriginPatterns("*") // Allow all origins for development
+                .allowedOrigins("http://localhost:3000", "http://127.0.0.1:3000")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD")
                 .allowedHeaders("*")
+                .exposedHeaders("*")
                 .allowCredentials(true)
                 .maxAge(3600);
     }
@@ -31,13 +32,18 @@ public class CorsConfig implements WebMvcConfigurer {
         CorsConfiguration config = new CorsConfiguration();
         
         // Cho phép tất cả các origin trong môi trường development
-        config.addAllowedOrigin("http://localhost:3000");
+        config.setAllowedOriginPatterns(Arrays.asList("*"));
+        config.setAllowedOrigins(Arrays.asList(
+            "http://localhost:3000", 
+            "http://127.0.0.1:3000",
+            "http://localhost:8080"
+        ));
         
         // Cho phép tất cả các header
-        config.addAllowedHeader("*");
+        config.setAllowedHeaders(Arrays.asList("*"));
         
         // Expose các header cần thiết
-        config.setExposedHeaders(List.of(
+        config.setExposedHeaders(Arrays.asList(
             "Authorization", 
             "Content-Type", 
             "Accept", 
@@ -45,11 +51,12 @@ public class CorsConfig implements WebMvcConfigurer {
             "Access-Control-Allow-Origin", 
             "Access-Control-Allow-Credentials", 
             "Access-Control-Allow-Headers", 
-            "Access-Control-Allow-Methods"
+            "Access-Control-Allow-Methods",
+            "X-Requested-With"
         ));
         
         // Cho phép tất cả các method
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
         
         // Cho phép gửi cookie
         config.setAllowCredentials(true);

@@ -37,6 +37,7 @@ export default function LoginPage() {
     const password = formData.get("password") as string
 
     try {
+      console.log("Attempting login with:", { email, password });
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
@@ -45,11 +46,16 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       })
 
+      console.log("Response status:", response.status);
+      
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Login error:", errorText);
         throw new Error("Đăng nhập thất bại")
       }
 
       const data: AuthResponse = await response.json()
+      console.log("Login success:", data);
       
       // Lưu thông tin người dùng và token vào localStorage
       localStorage.setItem("user", JSON.stringify({
@@ -60,13 +66,28 @@ export default function LoginPage() {
         token: data.token,
         refreshToken: data.refreshToken
       }))
+      
+      // Lưu token vào cookie để middleware có thể truy cập
+      document.cookie = `auth-token=${data.token}; path=/; max-age=86400; SameSite=Lax`;
 
       // Chuyển hướng dựa trên vai trò
+      console.log("Redirecting user with role:", data.role);
       if (data.role === "admin") {
-        router.push("/admin/dashboard")
+        console.log("Redirecting to admin dashboard");
+        router.push("/admin/dashboard");
       } else {
-        router.push("/customer/dashboard")
+        console.log("Redirecting to customer dashboard");
+        router.push("/customer/dashboard");
       }
+      
+      // Backup redirect nếu router.push không hoạt động
+      setTimeout(() => {
+        if (data.role === "admin") {
+          window.location.href = "/admin/dashboard";
+        } else {
+          window.location.href = "/customer/dashboard";
+        }
+      }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Đăng nhập thất bại")
     } finally {

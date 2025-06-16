@@ -78,4 +78,22 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
     @Query("SELECT b FROM Booking b ORDER BY b.createdAt DESC")
     List<Booking> findFirst10ByOrderByCreatedAtDesc();
+
+    @Query("SELECT b FROM Booking b WHERE b.user.id = :userId ORDER BY b.bookingDate DESC")
+    List<Booking> findByUserIdOrderByBookingDateDesc(@Param("userId") Integer userId);
+    
+    @Query("SELECT b FROM Booking b WHERE b.user.id = :userId ORDER BY b.createdAt DESC")
+    List<Booking> findByUserIdOrderByCreatedAtDesc(@Param("userId") Integer userId);
+    
+    @Query("""
+        SELECT b FROM Booking b 
+        LEFT JOIN FETCH b.user 
+        LEFT JOIN FETCH b.court 
+        LEFT JOIN FETCH b.timeSlot 
+        LEFT JOIN FETCH b.status 
+        LEFT JOIN FETCH b.customerBookingInfo 
+        WHERE b.user.id = :userId 
+        ORDER BY b.createdAt DESC
+    """)
+    List<Booking> findByUserIdWithAllDetails(@Param("userId") Integer userId);
 }

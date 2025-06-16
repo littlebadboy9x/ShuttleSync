@@ -5,6 +5,7 @@ import com.example.shuttlesync.exeption.ResourceNotFoundException;
 import com.example.shuttlesync.model.*;
 import com.example.shuttlesync.repository.*;
 import com.example.shuttlesync.service.BookingService;
+import com.example.shuttlesync.service.EmailService;
 import com.example.shuttlesync.service.NotificationService;
 import com.example.shuttlesync.service.SystemChangeLogService;
 import lombok.RequiredArgsConstructor;
@@ -31,13 +32,13 @@ public class BookingServiceImpl implements BookingService {
     private final PaymentRepository paymentRepository;
     private final SystemConfigRepository systemConfigRepository;
     private final DiscountRepository discountRepository;
-    private final CustomerBookingInfoRepository customerBookingInfoRepository;
     private final NotificationService notificationService;
     private final SystemChangeLogService systemChangeLogService;
     private final BookingStatusTypeRepository bookingStatusTypeRepository;
     private final NotificationRepository notificationRepository;
     private final SystemChangeLogRepository systemChangeLogRepository;
     private final PaymentStatusTypeRepository paymentStatusTypeRepository;
+    private final EmailService emailService;
     
     @Override
     public List<Booking> getAllBookings() {
@@ -151,6 +152,8 @@ public class BookingServiceImpl implements BookingService {
         log.setChangedBy(user);
         systemChangeLogRepository.save(log);
         
+        // CustomerBookingInfo sẽ được tự động tạo bởi database trigger
+        
         return savedBooking;
     }
     
@@ -200,12 +203,22 @@ public class BookingServiceImpl implements BookingService {
             payment.setCreatedAt(LocalDateTime.now());
             paymentRepository.save(payment);
             
+            // CustomerBookingInfo sẽ được tự động update bởi database triggers
+            
             // Thông báo cho người dùng
             Notification notification = new Notification();
             notification.setUser(booking.getUser());
             notification.setMessage("Đặt sân của bạn đã được xác nhận. Vui lòng tiến hành thanh toán.");
             notification.setIsRead(false);
             notificationRepository.save(notification);
+            
+            // Gửi email xác nhận đặt sân
+            try {
+                emailService.sendBookingConfirmationEmail(booking.getUser(), booking);
+            } catch (Exception e) {
+                // Log lỗi nhưng không làm gián đoạn flow chính
+                System.err.println("Failed to send confirmation email: " + e.getMessage());
+            }
         }
         
         // Nếu trạng thái là "Đã hủy" (ID = 3)
@@ -216,6 +229,14 @@ public class BookingServiceImpl implements BookingService {
             notification.setMessage("Đặt sân của bạn đã bị hủy.");
             notification.setIsRead(false);
             notificationRepository.save(notification);
+            
+            // Gửi email thông báo hủy đặt sân
+            try {
+                emailService.sendBookingCancellationEmail(booking.getUser(), booking);
+            } catch (Exception e) {
+                // Log lỗi nhưng không làm gián đoạn flow chính
+                System.err.println("Failed to send cancellation email: " + e.getMessage());
+            }
         }
         
         return updatedBooking;
@@ -334,33 +355,7 @@ public class BookingServiceImpl implements BookingService {
         
         paymentRepository.save(payment);
     }
-    
-    private void updateCustomerBookingInfo(Booking booking) {
-        CustomerBookingInfo bookingInfo = customerBookingInfoRepository.findById(booking.getId())
-                .orElse(new CustomerBookingInfo());
-        
-        bookingInfo.setBookingId(booking.getId());
-        bookingInfo.setBooking(booking);
-        bookingInfo.setUserFullName(booking.getUser().getFullName());
-        bookingInfo.setUserEmail(booking.getUser().getEmail());
-        bookingInfo.setCourtName(booking.getCourt().getName());
-        bookingInfo.setBookingDate(booking.getBookingDate());
-        bookingInfo.setSlotStartTime(booking.getTimeSlot().getStartTime());
-        bookingInfo.setSlotEndTime(booking.getTimeSlot().getEndTime());
-        bookingInfo.setOriginalPrice(booking.getTimeSlot().getPrice());
-        bookingInfo.setBookingStatus(booking.getStatus().getName());
-        
-        // Lấy thông tin thanh toán nếu có
-        List<Payment> payments = paymentRepository.findByBookingId(booking.getId());
-        if (!payments.isEmpty()) {
-            Payment latestPayment = payments.get(0);
-            bookingInfo.setPaymentAmount(latestPayment.getAmount());
-            bookingInfo.setPaymentMethod(latestPayment.getPaymentMethod());
-            bookingInfo.setPaymentStatus(latestPayment.getPaymentStatus().getName());
-        }
-        
-        customerBookingInfoRepository.save(bookingInfo);
-    }
+
     
     private void notifyBookingCreated(Booking booking) {
         // Thông báo cho khách hàng
@@ -477,5 +472,20 @@ public class BookingServiceImpl implements BookingService {
         dto.setEndTime(booking.getTimeSlot().getEndTime().toString());
         dto.setStatus(booking.getStatus().getId().toString());
         return dto;
+    }
+    
+    // Sync methods không cần thiết nữa vì database triggers sẽ tự động sync
+    @Override
+    @Transactional
+    public void syncPaymentStatusForAllBookings() {
+        // Database triggers sẽ tự động sync, method này chỉ để backward compatibility
+        System.out.println("Sync không cần thiết - database triggers đã tự động sync CustomerBookingInfo");
+    }
+    
+    @Override
+    @Transactional
+    public void syncPaymentStatusForBooking(Integer bookingId) {
+        // Database triggers sẽ tự động sync, method này chỉ để backward compatibility
+        System.out.println("Sync không cần thiết cho booking " + bookingId + " - database triggers đã tự động sync");
     }
 } 

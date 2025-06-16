@@ -42,4 +42,8 @@ public interface BookingService {
     List<BookingDTO> getRecentBookings();
     
     Booking saveBooking(Booking booking);
+    
+    void syncPaymentStatusForAllBookings();
+    
+    void syncPaymentStatusForBooking(Integer bookingId);
 }

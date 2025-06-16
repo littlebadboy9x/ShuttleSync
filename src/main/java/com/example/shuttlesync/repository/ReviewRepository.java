@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Integer> {
@@ -22,4 +23,7 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     
     @Query("SELECT r FROM Review r ORDER BY r.createdAt DESC")
     List<Review> findRecentReviews();
+    
+    @Query("SELECT r FROM Review r WHERE r.booking.id = :bookingId AND r.user.id = :userId")
+    Optional<Review> findByBookingIdAndUserId(@Param("bookingId") Integer bookingId, @Param("userId") Integer userId);
 } 

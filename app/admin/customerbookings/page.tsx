@@ -182,12 +182,19 @@ export default function CustomerBookingsPage() {
 
   const handleConfirmBooking = async (bookingId: number) => {
     try {
-      await axios.post(`${API_URL}/bookings/${bookingId}/approve`, {}, getAuthHeader())
+      const response = await axios.post(`${API_URL}/bookings/${bookingId}/approve`, {}, getAuthHeader())
+      
+      if (response.data.success) {
+        const { invoiceCreated, invoiceId } = response.data;
+        
       loadBookings() // Refresh data
       toast({
         title: "Thành công",
-        description: "Đã xác nhận đặt sân thành công",
+          description: invoiceCreated 
+            ? `Đã xác nhận đặt sân và tạo hóa đơn #${invoiceId} thành công`
+            : "Đã xác nhận đặt sân thành công",
       })
+      }
     } catch (error) {
       console.error('Error confirming booking:', error)
       toast({

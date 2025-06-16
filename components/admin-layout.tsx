@@ -6,6 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ModeToggle } from "@/components/mode-toggle"
+import { Toaster } from "@/components/ui/toaster"
 import { CreditCard } from 'lucide-react'
 import { CircleUserRound } from 'lucide-react'
 import {
@@ -288,6 +289,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Cấu hình chính Popup */}
         <ConfigPopup isOpen={showConfigPopup} onClose={() => setShowConfigPopup(false)} />
+        
+        {/* Toast notifications */}
+        <Toaster />
       </div>
   )
 }
