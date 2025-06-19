@@ -50,6 +50,11 @@ interface Voucher {
   validTo: Date;
   status: "active" | "inactive" | "expired";
   description: string;
+  voucherType: "PUBLIC" | "PERSONAL";
+  requiredBookingCount?: number;
+  createdBy?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export default function VouchersPage() {
@@ -57,11 +62,12 @@ export default function VouchersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [currentVoucher, setCurrentVoucher] = useState<Voucher | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [voucherTypeFilter, setVoucherTypeFilter] = useState("all");
   const [sortConfig, setSortConfig] = useState({ key: "code", direction: "asc" });
 
   const [formData, setFormData] = useState({
@@ -75,6 +81,8 @@ export default function VouchersPage() {
     validFrom: undefined as Date | undefined,
     validTo: undefined as Date | undefined,
     description: "",
+    voucherType: "PUBLIC" as "PUBLIC" | "PERSONAL",
+    requiredBookingCount: 0,
   });
 
   useEffect(() => {
@@ -153,7 +161,8 @@ export default function VouchersPage() {
                           voucher.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || voucher.status === statusFilter;
     const matchesType = typeFilter === "all" || voucher.type === typeFilter;
-    return matchesSearch && matchesStatus && matchesType;
+    const matchesVoucherType = voucherTypeFilter === "all" || voucher.voucherType === voucherTypeFilter;
+    return matchesSearch && matchesStatus && matchesType && matchesVoucherType;
   });
 
   const handleAdd = () => {
@@ -169,6 +178,8 @@ export default function VouchersPage() {
       validFrom: undefined,
       validTo: undefined,
       description: "",
+      voucherType: "PUBLIC",
+      requiredBookingCount: 0,
     });
     setIsDialogOpen(true);
   };
@@ -199,13 +210,17 @@ export default function VouchersPage() {
       validFrom: validFrom,
       validTo: validTo,
       description: voucher.description,
+      voucherType: voucher.voucherType || "PUBLIC",
+      requiredBookingCount: voucher.requiredBookingCount || 0,
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (voucher: Voucher) => {
-    setCurrentVoucher(voucher);
-    setIsDeleteDialogOpen(true);
+  const handleStatusChange = (voucher: Voucher) => {
+    if (voucher.status === 'active') {
+      setCurrentVoucher(voucher);
+      setIsStatusDialogOpen(true);
+    }
   };
 
   const handleSaveVoucher = async () => {
@@ -257,6 +272,8 @@ export default function VouchersPage() {
         validFrom: formData.validFrom?.toISOString().split('T')[0],
         validTo: formData.validTo?.toISOString().split('T')[0],
         description: formData.description,
+        voucherType: formData.voucherType,
+        requiredBookingCount: formData.voucherType === "PERSONAL" ? formData.requiredBookingCount : null,
       };
 
       let response;
@@ -327,8 +344,8 @@ export default function VouchersPage() {
     }
   };
 
-  const confirmDelete = async () => {
-    if (!currentVoucher) return;
+  const confirmStatusChange = async () => {
+    if (!currentVoucher || currentVoucher.status !== 'active') return;
 
     try {
       // Lấy token từ localStorage
@@ -336,70 +353,35 @@ export default function VouchersPage() {
       const user = userStr ? JSON.parse(userStr) : null;
       const token = user?.token;
 
-      const response = await fetch(`/api/admin/vouchers/${currentVoucher.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-        },
-      });
-
-      if (response.ok) {
-        setVouchers(prev => prev.filter(v => v.id !== currentVoucher.id));
-        toast({
-          title: "Thành công",
-          description: "Đã xóa voucher thành công",
-        });
-      } else {
-        console.error('Failed to delete voucher');
-        toast({
-          title: "Lỗi",
-          description: "Không thể xóa voucher",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("Error deleting voucher:", error);
-      toast({
-        title: "Lỗi",
-        description: "Có lỗi xảy ra khi xóa voucher",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleteDialogOpen(false);
-      setCurrentVoucher(null);
-    }
-  };
-
-  const handleToggleStatus = async (voucher: Voucher) => {
-    try {
-      // Lấy token từ localStorage
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
-      const token = user?.token;
-
-      const response = await fetch(`/api/admin/vouchers/${voucher.id}/toggle`, {
+      // Gọi API PATCH /status để cập nhật status expired
+      const response = await fetch(`/api/admin/vouchers/${currentVoucher.id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : '',
         },
+        body: JSON.stringify({
+          status: 'expired'
+        }),
       });
 
       if (response.ok) {
         const updatedVoucher = await response.json();
         setVouchers(prev => prev.map(v => 
-          v.id === voucher.id ? {
+          v.id === currentVoucher.id ? {
             ...updatedVoucher,
+            status: 'expired', // Đảm bảo set status là expired
             validFrom: new Date(updatedVoucher.validFrom),
             validTo: new Date(updatedVoucher.validTo)
           } : v
         ));
         toast({
           title: "Thành công",
-          description: `Đã ${updatedVoucher.status === 'active' ? 'kích hoạt' : 'tạm dừng'} voucher`,
+          description: "Đã chuyển voucher sang trạng thái hết hạn",
         });
       } else {
-        console.error('Failed to toggle voucher status');
+        const errorText = await response.text();
+        console.error('Failed to update voucher status:', errorText);
         toast({
           title: "Lỗi",
           description: "Không thể cập nhật trạng thái voucher",
@@ -407,12 +389,15 @@ export default function VouchersPage() {
         });
       }
     } catch (error) {
-      console.error("Error toggling voucher status:", error);
+      console.error("Error updating voucher status:", error);
       toast({
         title: "Lỗi",
         description: "Có lỗi xảy ra khi cập nhật trạng thái",
         variant: "destructive",
       });
+    } finally {
+      setIsStatusDialogOpen(false);
+      setCurrentVoucher(null);
     }
   };
 
@@ -429,7 +414,12 @@ export default function VouchersPage() {
   };
 
   const formatDiscount = (type: string, value: number) => {
-    return type === "percentage" ? `${value}%` : formatCurrency(value);
+    // Logic mới: ≤100 là %, >100 là VND
+    if (value <= 100) {
+      return `${value}%`;
+    } else {
+      return formatCurrency(value);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -450,13 +440,7 @@ export default function VouchersPage() {
     }
   };
 
-  // Statistics
-  const totalVouchers = vouchers.length;
-  const activeVouchers = vouchers.filter(v => v.status === "active").length;
-  const expiredVouchers = vouchers.filter(v => v.status === "expired").length;
-  const totalUsage = vouchers.reduce((sum, v) => sum + v.usedCount, 0);
-  const avgUsageRate = totalVouchers > 0 ? 
-    vouchers.reduce((sum, v) => sum + (v.usedCount / v.usageLimit), 0) / totalVouchers * 100 : 0;
+  // Statistics moved to Analytics page
 
   // Hàm kiểm tra ngày hợp lệ
   const isValidDate = (date: any): boolean => {
@@ -479,7 +463,7 @@ export default function VouchersPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-indigo-600 bg-clip-text text-transparent mb-2">
-                Quản Lý Voucher
+                Phiếu Giảm Giá
               </h1>
               <p className="text-slate-600 text-lg">
                 Quản lý mã giảm giá và khuyến mãi cho khách hàng
@@ -505,85 +489,7 @@ export default function VouchersPage() {
             </div>
           </div>
 
-          {/* Statistics Cards */}
-          <div className="grid gap-6 md:grid-cols-5 mb-8">
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Tổng Voucher
-                </CardTitle>
-                <Gift className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-slate-900">{totalVouchers}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Tất cả voucher
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Đang Hoạt Động
-                </CardTitle>
-                <div className="w-4 h-4 bg-green-500 rounded-full" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{activeVouchers}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Voucher có thể sử dụng
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Hết Hạn
-                </CardTitle>
-                <Clock className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">{expiredVouchers}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Voucher không còn hiệu lực
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Lượt Sử Dụng
-                </CardTitle>
-                <Users className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-purple-600">{totalUsage}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Tổng lượt đã sử dụng
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Tỷ Lệ Sử Dụng
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-emerald-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-emerald-600">
-                  {avgUsageRate.toFixed(1)}%
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Tỷ lệ sử dụng trung bình
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Statistics Cards moved to Analytics page */}
 
           {/* Search and Filter */}
           <Card className="mb-8 border-0 shadow-lg bg-white/90 backdrop-blur-sm">
@@ -619,6 +525,17 @@ export default function VouchersPage() {
                     <SelectItem value="all">Tất cả loại</SelectItem>
                     <SelectItem value="percentage">Phần trăm</SelectItem>
                     <SelectItem value="fixed">Số tiền cố định</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={voucherTypeFilter} onValueChange={setVoucherTypeFilter}>
+                  <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="Loại voucher" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả voucher</SelectItem>
+                    <SelectItem value="PUBLIC">Công khai</SelectItem>
+                    <SelectItem value="PERSONAL">Cá nhân</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -665,6 +582,7 @@ export default function VouchersPage() {
                           <ArrowUpDown className="ml-2 h-4 w-4" />
                         </div>
                       </TableHead>
+                      <TableHead className="font-semibold text-slate-700">Loại Voucher</TableHead>
                       <TableHead className="font-semibold text-slate-700">Loại & Giá trị</TableHead>
                       <TableHead className="font-semibold text-slate-700">Điều kiện</TableHead>
                       <TableHead className="font-semibold text-slate-700">Sử dụng</TableHead>
@@ -676,7 +594,7 @@ export default function VouchersPage() {
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12">
+                        <TableCell colSpan={10} className="text-center py-12">
                           <div className="flex items-center justify-center">
                             <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
                             <span className="text-slate-600">Đang tải dữ liệu...</span>
@@ -685,7 +603,7 @@ export default function VouchersPage() {
                       </TableRow>
                     ) : filteredVouchers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12">
+                        <TableCell colSpan={10} className="text-center py-12">
                           <div className="text-slate-500">
                             <Gift className="h-12 w-12 mx-auto mb-4 text-slate-300" />
                             <p className="text-lg font-medium">Không có dữ liệu</p>
@@ -726,6 +644,26 @@ export default function VouchersPage() {
                                 {voucher.description}
                               </p>
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              {voucher.voucherType === "PERSONAL" ? (
+                                <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+                                  <Users className="h-3 w-3 mr-1" />
+                                  Cá nhân
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                                  <TrendingUp className="h-3 w-3 mr-1" />
+                                  Công khai
+                                </Badge>
+                              )}
+                            </div>
+                            {voucher.voucherType === "PERSONAL" && voucher.requiredBookingCount && (
+                              <p className="text-xs text-slate-500 mt-1">
+                                Cần {voucher.requiredBookingCount} lượt đặt
+                              </p>
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center space-x-2">
@@ -788,22 +726,16 @@ export default function VouchersPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleToggleStatus(voucher)}
+                                onClick={() => handleStatusChange(voucher)}
+                                disabled={voucher.status !== 'active'}
                                 className={`${
-                                  voucher.status === "active"
-                                    ? "hover:bg-yellow-50 hover:text-yellow-700 hover:border-yellow-200"
-                                    : "hover:bg-green-50 hover:text-green-700 hover:border-green-200"
+                                  voucher.status === 'active' 
+                                    ? "hover:bg-red-50 hover:text-red-700 hover:border-red-200" 
+                                    : "opacity-50 cursor-not-allowed"
                                 }`}
+                                title={voucher.status === 'active' ? 'Đổi sang hết hạn' : 'Chỉ có thể đổi trạng thái voucher đang hoạt động'}
                               >
-                                {voucher.status === "active" ? "⏸️" : "▶️"}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDelete(voucher)}
-                                className="hover:bg-red-50 hover:text-red-700 hover:border-red-200"
-                              >
-                                <Trash2 className="h-3 w-3" />
+                                <Clock className="h-3 w-3" />
                               </Button>
                             </div>
                           </TableCell>
@@ -853,6 +785,50 @@ export default function VouchersPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="voucherType">Loại voucher *</Label>
+                <Select 
+                  value={formData.voucherType} 
+                  onValueChange={(value: "PUBLIC" | "PERSONAL") => setFormData({...formData, voucherType: value})}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn loại voucher" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PUBLIC">
+                      <div className="flex items-center">
+                        <TrendingUp className="h-4 w-4 mr-2 text-blue-600" />
+                        Công khai - Tất cả khách hàng
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="PERSONAL">
+                      <div className="flex items-center">
+                        <Users className="h-4 w-4 mr-2 text-purple-600" />
+                        Cá nhân - Theo điều kiện
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {formData.voucherType === "PERSONAL" && (
+                <div className="space-y-2">
+                  <Label htmlFor="requiredBookingCount">Yêu cầu số lượt đặt sân</Label>
+                  <Input
+                    id="requiredBookingCount"
+                    type="number"
+                    value={formData.requiredBookingCount}
+                    onChange={(e) => setFormData({...formData, requiredBookingCount: Number(e.target.value)})}
+                    placeholder="5"
+                    min="1"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Khách hàng cần đặt ít nhất bao nhiêu lượt sân để nhận voucher này
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -992,21 +968,29 @@ export default function VouchersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      {/* Status Change Confirmation Dialog */}
+      <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Xác nhận xóa voucher</DialogTitle>
+            <DialogTitle>Xác nhận đổi trạng thái voucher</DialogTitle>
             <DialogDescription>
-              Bạn có chắc chắn muốn xóa voucher "{currentVoucher?.name}"? Hành động này không thể hoàn tác.
+              Bạn có chắc chắn muốn chuyển voucher "{currentVoucher?.name}" từ trạng thái 
+              <strong className="text-green-600"> Hoạt động </strong> 
+              sang 
+              <strong className="text-red-600"> Hết hạn</strong>? 
+              <br />
+              <span className="text-sm text-slate-500 mt-2 block">
+                Voucher sẽ không thể sử dụng sau khi chuyển sang hết hạn.
+              </span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
               Hủy
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Xóa
+            <Button variant="destructive" onClick={confirmStatusChange}>
+              <Clock className="h-4 w-4 mr-2" />
+              Đổi sang Hết hạn
             </Button>
           </DialogFooter>
         </DialogContent>

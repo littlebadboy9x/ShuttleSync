@@ -22,4 +22,6 @@ public class CreateVoucherRequest {
     private LocalDate validFrom;
     private LocalDate validTo;
     private String description;
+    private String voucherType; // "PUBLIC" or "PERSONAL"
+    private Integer requiredBookingCount;
 } 

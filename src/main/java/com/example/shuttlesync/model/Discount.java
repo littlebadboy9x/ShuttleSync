@@ -64,6 +64,16 @@ public class Discount {
     @Column(name = "UpdatedAt")
     private LocalDateTime updatedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "VoucherType")
+    private VoucherType voucherType = VoucherType.PUBLIC;
+
+    @Column(name = "RequiredBookingCount")
+    private Integer requiredBookingCount;
+
+    @Column(name = "CreatedBy")
+    private Integer createdBy;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -81,5 +91,9 @@ public class Discount {
 
     public enum DiscountStatus {
         ACTIVE, INACTIVE, EXPIRED
+    }
+
+    public enum VoucherType {
+        PUBLIC, PERSONAL
     }
 } 

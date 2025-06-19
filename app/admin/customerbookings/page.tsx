@@ -245,14 +245,7 @@ export default function CustomerBookingsPage() {
     }
   }
 
-  // Statistics
-  const totalBookings = bookings.length;
-  const confirmedBookings = bookings.filter(b => b.status === "2").length;
-  const pendingBookings = bookings.filter(b => b.status === "1").length;
-  const paidBookings = bookings.filter(b => b.paymentStatus === "paid").length;
-  const totalRevenue = bookings
-    .filter(b => b.paymentStatus === "paid")
-    .reduce((sum, b) => sum + b.amount, 0);
+  // Statistics moved to Analytics page
 
   return (
     <AdminLayout>
@@ -281,85 +274,7 @@ export default function CustomerBookingsPage() {
             </div>
           </div>
 
-          {/* Statistics Cards */}
-          <div className="grid gap-6 md:grid-cols-5 mb-8">
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Tổng Đặt Sân
-                </CardTitle>
-                <CalendarDays className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-slate-900">{totalBookings}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Tất cả đặt sân
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Đã Xác Nhận
-                </CardTitle>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{confirmedBookings}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Đặt sân đã xác nhận
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Chờ Xử Lý
-                </CardTitle>
-                <Clock className="h-4 w-4 text-yellow-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">{pendingBookings}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Chờ xác nhận
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Đã Thanh Toán
-                </CardTitle>
-                <DollarSign className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-purple-600">{paidBookings}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Hoàn tất thanh toán
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Tổng Doanh Thu
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-emerald-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-emerald-600">
-                  {totalRevenue.toLocaleString('vi-VN')} VNĐ
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Từ đặt sân đã thanh toán
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Statistics Cards moved to Analytics page */}
 
           {/* Search and Filter */}
           <Card className="mb-8 border-0 shadow-lg bg-white/90 backdrop-blur-sm">

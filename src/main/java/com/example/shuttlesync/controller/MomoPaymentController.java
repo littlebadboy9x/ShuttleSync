@@ -68,17 +68,21 @@ public class MomoPaymentController {
                 ));
             }
             
-            Invoice invoice = invoiceService.getInvoiceById(invoiceId);
-            MomoPayment payment = momoPaymentService.createPayment(invoice);
+            // Lấy source để phân biệt admin vs customer (mặc định là admin)
+            String source = (String) request.getOrDefault("source", "admin");
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "payUrl", payment.getPayUrl() != null ? payment.getPayUrl() : "",
-                "orderId", payment.getOrderId(),
-                "requestId", payment.getRequestId(),
-                "message", payment.getMessage() != null ? payment.getMessage() : "",
-                "resultCode", payment.getResultCode() != null ? payment.getResultCode() : ""
-            ));
+            Invoice invoice = invoiceService.getInvoiceById(invoiceId);
+            MomoPayment payment = momoPaymentService.createPayment(invoice, source);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("payUrl", payment.getPayUrl() != null ? payment.getPayUrl() : "");
+            response.put("orderId", payment.getOrderId() != null ? payment.getOrderId() : "");
+            response.put("requestId", payment.getRequestId() != null ? payment.getRequestId() : "");
+            response.put("message", payment.getMessage() != null ? payment.getMessage() : "");
+            response.put("resultCode", payment.getResultCode() != null ? payment.getResultCode() : "");
+            
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error creating MoMo payment", e);
             return ResponseEntity.internalServerError().body(Map.of(
@@ -92,18 +96,24 @@ public class MomoPaymentController {
     public ResponseEntity<?> checkPaymentStatus(@PathVariable String orderId) {
         try {
             MomoPayment payment = momoPaymentService.checkPaymentStatus(orderId);
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "orderId", payment.getOrderId(),
-                "status", payment.getPaymentStatus(),
-                "message", payment.getMessage(),
-                "transactionId", payment.getTransactionId()
-            ));
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("orderId", payment.getOrderId() != null ? payment.getOrderId() : "");
+            response.put("status", payment.getPaymentStatus() != null ? payment.getPaymentStatus() : "");
+            response.put("message", payment.getMessage() != null ? payment.getMessage() : "");
+            response.put("transactionId", payment.getTransactionId() != null ? payment.getTransactionId() : "");
+            
+            // Thêm invoiceId để frontend có thể redirect về đúng trang
+            if (payment.getPayment() != null && payment.getPayment().getInvoice() != null) {
+                response.put("invoiceId", payment.getPayment().getInvoice().getId());
+            }
+            
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error checking MoMo payment status", e);
             return ResponseEntity.internalServerError().body(Map.of(
                 "success", false,
-                "message", e.getMessage()
+                "message", e.getMessage() != null ? e.getMessage() : "Unknown error"
             ));
         }
     }

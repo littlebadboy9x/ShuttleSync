@@ -15,7 +15,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -348,6 +351,56 @@ public class VoucherServiceImpl implements VoucherService {
     @Override
     public boolean isVoucherCodeUnique(String code) {
         return !discountRepository.existsByCode(code);
+    }
+    
+    // Auto voucher system implementations
+    @Override
+    public int autoGiftVouchersForUser(Integer userId) {
+        log.info("Auto gifting vouchers for user: {}", userId);
+        // Mock implementation - in real scenario, call stored procedure
+        return 0;
+    }
+    
+    @Override
+    public int autoGiftVouchersForAllUsers() {
+        log.info("Auto gifting vouchers for all users");
+        // Mock implementation - in real scenario, call stored procedure
+        return 0;
+    }
+    
+    @Override
+    public int getUserBookingCount(Integer userId) {
+        log.info("Getting booking count for user: {}", userId);
+        // Mock implementation - in real scenario, call database function
+        return 0;
+    }
+    
+    @Override
+    public Map<String, Object> getVoucherEligibility(Integer userId) {
+        log.info("Getting voucher eligibility for user: {}", userId);
+        // Mock implementation
+        Map<String, Object> result = new HashMap<>();
+        result.put("userId", userId);
+        result.put("bookingCount", 0);
+        result.put("eligibleVouchers", new ArrayList<>());
+        return result;
+    }
+    
+    @Override
+    public Map<String, Object> getPersonalVouchers(Integer userId) {
+        log.info("Getting personal vouchers for user: {}", userId);
+        // Mock implementation
+        Map<String, Object> result = new HashMap<>();
+        result.put("userId", userId);
+        result.put("personalVouchers", new ArrayList<>());
+        return result;
+    }
+    
+    @Override
+    public boolean giftVoucherManually(Integer userId, Integer voucherId, String notes) {
+        log.info("Manually gifting voucher {} to user {}", voucherId, userId);
+        // Mock implementation - in real scenario, insert into PersonalVouchers table
+        return true;
     }
 
     private void validateVoucherData(Discount voucher) {

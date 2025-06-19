@@ -141,7 +141,7 @@ public class InvoiceController {
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> updateStatus(
-            @PathVariable Long id,
+            @PathVariable Integer id,
             @RequestBody Map<String, String> payload
     ) {
         String status = payload.get("status");
@@ -151,8 +151,58 @@ public class InvoiceController {
             ));
         }
 
-        Invoice invoice = invoiceService.updateStatus(id, status);
-        return ResponseEntity.ok(invoice);
+        try {
+            Invoice invoice = invoiceService.updateStatus(id.longValue(), status);
+            return ResponseEntity.ok(convertToDTO(invoice));
+        } catch (Exception e) {
+            log.error("Error updating invoice status: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "message", "Failed to update invoice status: " + e.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/{id}/apply-voucher")
+    public ResponseEntity<Map<String, Object>> applyVoucher(
+            @PathVariable Integer id,
+            @RequestBody Map<String, Object> request,
+            Authentication authentication) {
+        
+        log.info("Applying voucher to invoice: {}", id);
+        
+        try {
+            Integer voucherId = (Integer) request.get("voucherId");
+            if (voucherId == null) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "success", false,
+                        "message", "Voucher ID is required"
+                ));
+            }
+            
+            User currentUser = getCurrentUser(authentication);
+            Invoice updatedInvoice = invoiceService.applyVoucherToInvoice(id, voucherId, currentUser);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("discountAmount", updatedInvoice.getDiscountAmount());
+            response.put("finalAmount", updatedInvoice.getFinalAmount());
+            response.put("message", "Voucher đã được áp dụng thành công");
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            log.error("Error applying voucher to invoice: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", e.getMessage()
+            ));
+        } catch (Exception e) {
+            log.error("Unexpected error applying voucher to invoice: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "success", false,
+                    "message", "Đã xảy ra lỗi khi áp dụng voucher: " + e.getMessage()
+            ));
+        }
     }
 
     @GetMapping("/{id}/export")
@@ -295,6 +345,22 @@ public class InvoiceController {
                 dto.setCustomerEmail("N/A");
                 dto.setCustomerPhone("N/A");
             }
+            
+            // Thêm thông tin booking channel từ booking
+            if (invoice.getBooking().getBookingChannel() != null) {
+                dto.setBookingChannel(invoice.getBooking().getBookingChannel().name());
+                dto.setBookingChannelDisplay(invoice.getBooking().getBookingChannel().getDescription());
+            }
+            
+            if (invoice.getBooking().getBookingType() != null) {
+                dto.setBookingType(invoice.getBooking().getBookingType().name());
+                dto.setBookingTypeDisplay(invoice.getBooking().getBookingType().getDescription());
+            }
+            
+            if (invoice.getBooking().getCounterStaffId() != null) {
+                dto.setCounterStaffId(invoice.getBooking().getCounterStaffId());
+                // TODO: Load staff name from User table if needed
+            }
         } else {
             dto.setBookingId(0);
             dto.setCustomerName("N/A");
@@ -303,6 +369,22 @@ public class InvoiceController {
         }
 
         dto.setInvoiceDate(invoice.getInvoiceDate());
+        
+        // Thêm thông tin invoice type
+        if (invoice.getInvoiceType() != null) {
+            dto.setInvoiceType(invoice.getInvoiceType().name());
+            dto.setInvoiceTypeDisplay(invoice.getInvoiceType().getDisplayName());
+        }
+        
+        // Thêm booking channel từ invoice (backup)
+        if (dto.getBookingChannel() == null && invoice.getBookingChannel() != null) {
+            dto.setBookingChannel(invoice.getBookingChannel());
+        }
+        
+        if (invoice.getCounterStaffId() != null) {
+            dto.setCounterStaffId(invoice.getCounterStaffId());
+        }
+        
         dto.setOriginalAmount(invoice.getOriginalAmount());
         dto.setDiscountAmount(invoice.getDiscountAmount());
         dto.setFinalAmount(invoice.getFinalAmount());

@@ -181,20 +181,7 @@ export default function UsersPage() {
         }
     }
 
-    // Statistics
-    const totalUsers = users.length;
-    const adminUsers = users.filter(u => u.role === "admin").length;
-    const customerUsers = users.filter(u => u.role === "customer").length;
-    const recentUsers = users.filter(u => {
-        try {
-            const createdDate = new Date(u.createdAt);
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            return createdDate > thirtyDaysAgo;
-        } catch {
-            return false;
-        }
-    }).length;
+    // Removed statistics - moved to analytics page
 
     return (
         <AdminLayout>
@@ -288,68 +275,7 @@ export default function UsersPage() {
                         </div>
                     </div>
 
-                    {/* Statistics Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-600">
-                                    Tổng Người Dùng
-                                </CardTitle>
-                                <Users className="h-4 w-4 text-blue-600" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-slate-900">{totalUsers}</div>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Tất cả người dùng trong hệ thống
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-600">
-                                    Quản Trị Viên
-                                </CardTitle>
-                                <Shield className="h-4 w-4 text-red-600" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-red-600">{adminUsers}</div>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Người dùng có quyền admin
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-600">
-                                    Khách Hàng
-                                </CardTitle>
-                                <UserCheck className="h-4 w-4 text-green-600" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-green-600">{customerUsers}</div>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Người dùng thường
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-600">
-                                    Mới Tháng Này
-                                </CardTitle>
-                                <Calendar className="h-4 w-4 text-purple-600" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-purple-600">{recentUsers}</div>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Đăng ký trong 30 ngày qua
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
+                    {/* Statistics moved to Analytics page */}
 
                     {/* Search and Filter */}
                     <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">

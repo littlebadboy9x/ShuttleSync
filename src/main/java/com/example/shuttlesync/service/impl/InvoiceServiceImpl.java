@@ -85,6 +85,37 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setDiscountAmount(BigDecimal.ZERO);
         invoice.setFinalAmount(BigDecimal.ZERO);
         
+        // Set booking channel and invoice type từ booking
+        if (booking.getBookingChannel() != null) {
+            invoice.setBookingChannel(booking.getBookingChannel().name());
+            // Auto-map invoice type based on booking channel
+            switch (booking.getBookingChannel()) {
+                case ONLINE:
+                    invoice.setInvoiceType(Invoice.InvoiceType.ONLINE);
+                    break;
+                case COUNTER:
+                    invoice.setInvoiceType(Invoice.InvoiceType.COUNTER);
+                    break;
+                case PHONE:
+                    invoice.setInvoiceType(Invoice.InvoiceType.PHONE);
+                    break;
+                case MOBILE_APP:
+                    invoice.setInvoiceType(Invoice.InvoiceType.MOBILE_APP);
+                    break;
+                default:
+                    invoice.setInvoiceType(Invoice.InvoiceType.STANDARD);
+            }
+        } else {
+            // Default values for old bookings
+            invoice.setBookingChannel("ONLINE");
+            invoice.setInvoiceType(Invoice.InvoiceType.ONLINE);
+        }
+        
+        // Set counter staff nếu có
+        if (booking.getCounterStaffId() != null) {
+            invoice.setCounterStaffId(booking.getCounterStaffId());
+        }
+        
         // Create invoice detail for the time slot
         TimeSlot timeSlot = booking.getTimeSlot();
         InvoiceDetail detail = new InvoiceDetail();
@@ -103,13 +134,116 @@ public class InvoiceServiceImpl implements InvoiceService {
         
         invoice.getInvoiceDetails().add(detail);
         
+        BigDecimal totalAmount = timeSlot.getPrice();
+        
+        // Parse services từ booking notes và tạo invoice details
+        if (booking.getNotes() != null && booking.getNotes().contains("Services:")) {
+            String notes = booking.getNotes();
+            String[] parts = notes.split("\\|");
+            
+            for (String part : parts) {
+                part = part.trim();
+                if (part.startsWith("Services:")) {
+                    String servicesStr = part.substring("Services:".length()).trim();
+                    String[] services = servicesStr.split(",");
+                    
+                    for (String serviceStr : services) {
+                        serviceStr = serviceStr.trim();
+                        // Parse "Service X xY" format
+                        if (serviceStr.startsWith("Service ") && serviceStr.contains(" x")) {
+                            try {
+                                String[] serviceParts = serviceStr.split(" x");
+                                String serviceIdStr = serviceParts[0].replace("Service ", "").trim();
+                                int serviceId = Integer.parseInt(serviceIdStr);
+                                int quantity = Integer.parseInt(serviceParts[1].trim());
+                                
+                                // Tìm service trong database
+                                Optional<com.example.shuttlesync.model.Service> serviceOpt = serviceRepository.findById(serviceId);
+                                if (serviceOpt.isPresent()) {
+                                    com.example.shuttlesync.model.Service service = serviceOpt.get();
+                                    
+                                    // Tạo invoice detail cho service
+                                    InvoiceDetail serviceDetail = new InvoiceDetail();
+                                    serviceDetail.setInvoice(invoice);
+                                    serviceDetail.setService(service);
+                                    serviceDetail.setItemName(service.getServiceName());
+                                    serviceDetail.setQuantity(quantity);
+                                    serviceDetail.setUnitPrice(service.getUnitPrice());
+                                    serviceDetail.setAmount(service.getUnitPrice().multiply(BigDecimal.valueOf(quantity)));
+                                    
+                                    invoice.getInvoiceDetails().add(serviceDetail);
+                                    totalAmount = totalAmount.add(serviceDetail.getAmount());
+                                    
+                                    log.info("Added service detail: {} x{} = {}", service.getServiceName(), quantity, serviceDetail.getAmount());
+                                }
+                            } catch (Exception e) {
+                                log.warn("Failed to parse service: {} - {}", serviceStr, e.getMessage());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         // Calculate amounts
-        invoice.setOriginalAmount(timeSlot.getPrice());
-        invoice.setFinalAmount(timeSlot.getPrice().subtract(invoice.getDiscountAmount()));
+        invoice.setOriginalAmount(totalAmount);
+        invoice.setFinalAmount(totalAmount.subtract(invoice.getDiscountAmount()));
+        
+        // Parse và apply voucher từ booking notes
+        if (booking.getNotes() != null && booking.getNotes().contains("Voucher:")) {
+            String notes = booking.getNotes();
+            String[] parts = notes.split("\\|");
+            
+            for (String part : parts) {
+                part = part.trim();
+                if (part.startsWith("Voucher:")) {
+                    String voucherStr = part.substring("Voucher:".length()).trim();
+                    // Parse "CODE - Name" format
+                    if (voucherStr.contains(" - ")) {
+                        String voucherCode = voucherStr.split(" - ")[0].trim();
+                        
+                        // Tìm voucher trong database
+                        Optional<Discount> voucherOpt = discountRepository.findByCode(voucherCode);
+                        if (voucherOpt.isPresent()) {
+                            Discount voucher = voucherOpt.get();
+                            
+                            // Calculate discount
+                            BigDecimal discountAmount;
+                            if (voucher.getType() == Discount.DiscountType.PERCENTAGE) {
+                                discountAmount = totalAmount.multiply(voucher.getValue().divide(new BigDecimal(100)))
+                                    .setScale(0, BigDecimal.ROUND_DOWN);
+                                
+                                if (voucher.getMaxDiscountAmount() != null && 
+                                    discountAmount.compareTo(voucher.getMaxDiscountAmount()) > 0) {
+                                    discountAmount = voucher.getMaxDiscountAmount();
+                                }
+                            } else {
+                                discountAmount = voucher.getValue();
+                                if (discountAmount.compareTo(totalAmount) > 0) {
+                                    discountAmount = totalAmount;
+                                }
+                            }
+                            
+                            invoice.setDiscountAmount(discountAmount);
+                            invoice.setFinalAmount(totalAmount.subtract(discountAmount));
+                            invoice.setNotes("Voucher: " + voucherCode);
+                            
+                            // Increase voucher usage count
+                            voucher.setUsedCount(voucher.getUsedCount() + 1);
+                            discountRepository.save(voucher);
+                            
+                            log.info("Applied voucher {}: discount = {}", voucherCode, discountAmount);
+                        }
+                    }
+                    break; // Only process first voucher
+                }
+            }
+        }
         
         Invoice savedInvoice = invoiceRepository.save(invoice);
         
-        log.info("Created invoice with id: {} for booking: {}", savedInvoice.getId(), bookingId);
+        log.info("Created invoice with id: {} for booking: {} with channel: {}, total details: {}", 
+                savedInvoice.getId(), bookingId, invoice.getBookingChannel(), savedInvoice.getInvoiceDetails().size());
         return savedInvoice;
     }
 
@@ -275,7 +409,50 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
         
         try {
-            // Tìm voucher trong cơ sở dữ liệu
+            // BƯỚC 1: Reset voucher cũ nếu có (hủy discount hiện tại)
+            if (invoice.getDiscountAmount() != null && invoice.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                log.info("Resetting previous voucher for invoice: {}", invoiceId);
+                
+                // Tìm voucher cũ từ notes và giảm usage count
+                String oldNotes = invoice.getNotes();
+                if (oldNotes != null && !oldNotes.trim().isEmpty()) {
+                    String oldVoucherCode = null;
+                    
+                    // Thử format mới: "Voucher: VOUCHERCODE"
+                    if (oldNotes.contains("Voucher: ")) {
+                        String[] parts = oldNotes.split("Voucher: ");
+                        if (parts.length > 1) {
+                            oldVoucherCode = parts[1].split(";")[0].trim();
+                        }
+                    }
+                    // Thử format cũ: "Đã áp dụng voucher: VOUCHERCODE"
+                    else if (oldNotes.contains("Đã áp dụng voucher: ")) {
+                        String[] parts = oldNotes.split("Đã áp dụng voucher: ");
+                        if (parts.length > 1) {
+                            oldVoucherCode = parts[1].split(";")[0].trim();
+                        }
+                    }
+                    
+                    // Nếu tìm thấy voucher code, giảm usage count
+                    if (oldVoucherCode != null && !oldVoucherCode.isEmpty()) {
+                        Optional<Discount> oldVoucherOpt = discountRepository.findByCode(oldVoucherCode);
+                        if (oldVoucherOpt.isPresent()) {
+                            Discount oldVoucher = oldVoucherOpt.get();
+                            if (oldVoucher.getUsedCount() > 0) {
+                                oldVoucher.setUsedCount(oldVoucher.getUsedCount() - 1);
+                                discountRepository.save(oldVoucher);
+                                log.info("Decreased usage count for old voucher: {}", oldVoucherCode);
+                            }
+                        }
+                    }
+                }
+                
+                // Reset discount
+                invoice.setDiscountAmount(BigDecimal.ZERO);
+                invoice.setFinalAmount(invoice.getOriginalAmount());
+            }
+            
+            // BƯỚC 2: Tìm và validate voucher mới
             Discount voucher = discountRepository.findById(voucherId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy voucher với ID: " + voucherId));
                 
@@ -305,7 +482,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                     "Yêu cầu tối thiểu: " + voucher.getMinOrderAmount());
             }
             
-            // Tính toán giá trị giảm giá
+            // BƯỚC 3: Tính toán giá trị giảm giá mới
             BigDecimal discountAmount;
             
             if (voucher.getType() == Discount.DiscountType.PERCENTAGE) {
@@ -329,21 +506,17 @@ public class InvoiceServiceImpl implements InvoiceService {
                 }
             }
             
-            // Cập nhật hóa đơn
+            // BƯỚC 4: Cập nhật hóa đơn với voucher mới
             invoice.setDiscountAmount(discountAmount);
             invoice.setFinalAmount(invoice.getOriginalAmount().subtract(discountAmount));
             
-            // Tăng số lần sử dụng voucher
+            // Tăng số lần sử dụng voucher mới
             voucher.setUsedCount(voucher.getUsedCount() + 1);
             discountRepository.save(voucher);
             
-            // Thêm ghi chú về voucher đã sử dụng
-            String voucherNote = "Đã áp dụng voucher: " + voucher.getCode();
-            if (invoice.getNotes() != null && !invoice.getNotes().isEmpty()) {
-                invoice.setNotes(invoice.getNotes() + "; " + voucherNote);
-            } else {
-                invoice.setNotes(voucherNote);
-            }
+            // BƯỚC 5: Cập nhật notes - THAY THẾ hoàn toàn thay vì append để tránh vượt quá độ dài
+            String voucherNote = "Voucher: " + voucher.getCode();
+            invoice.setNotes(voucherNote);
             
             Invoice savedInvoice = invoiceRepository.save(invoice);
             

@@ -16,12 +16,17 @@ import {
     X,
     LogOut,
     Activity,
-    Star,
-    Trophy,
     Search,
     Crown,
     Zap,
-    Shield
+    Phone,
+    Mail,
+    MapPin,
+    Facebook,
+    Instagram,
+    Twitter,
+    ChevronDown,
+    Clock
 } from "lucide-react"
 
 interface CustomerLayoutProps {
@@ -39,45 +44,28 @@ interface UserData {
 
 const navigation = [
     {
-        name: "Tổng quan",
+        name: "Trang chủ",
         href: "/customer/dashboard",
         icon: Home,
-        description: "Xem tổng quan hoạt động"
+        description: "Tổng quan và khuyến mãi"
     },
     {
         name: "Đặt sân",
         href: "/customer/booking",
         icon: Calendar,
-        description: "Đặt sân cầu lông"
+        description: "Đặt sân cầu lông ngay"
     },
     {
-        name: "Lịch sử",
-        href: "/customer/history",
-        icon: History,
-        description: "Xem lịch sử đặt sân"
-    },
-    {
-        name: "Hồ sơ",
-        href: "/customer/profile",
-        icon: User,
-        description: "Quản lý thông tin cá nhân"
-    },
-    {
-        name: "Thanh toán",
+        name: "Hóa đơn",
         href: "/customer/payment",
         icon: CreditCard,
-        description: "Quản lý thanh toán"
-    },
-    {
-        name: "Thông báo",
-        href: "/customer/notifications",
-        icon: Bell,
-        description: "Xem thông báo"
+        description: "Xem hóa đơn chờ thanh toán"
     }
 ]
 
 export function CustomerLayout({ children }: CustomerLayoutProps) {
-    const [sidebarOpen, setSidebarOpen] = useState(false)
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+    const [userMenuOpen, setUserMenuOpen] = useState(false)
     const [user, setUser] = useState<UserData | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [unreadNotifications, setUnreadNotifications] = useState(0)
@@ -125,7 +113,6 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
     const handleLogout = () => {
         localStorage.removeItem("user")
-        // Xóa cookie
         document.cookie = "auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
         router.push("/login")
     }
@@ -141,14 +128,14 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center">
+            <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="text-center">
                     <div className="relative w-16 h-16 mb-4 mx-auto">
                         <div className="absolute inset-0 border-4 border-blue-200 rounded-full animate-pulse"></div>
                         <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
                         <Activity className="absolute inset-0 m-auto text-blue-600" size={24} />
                     </div>
-                    <p className="text-gray-600">Đang tải...</p>
+                    <p className="text-gray-600 font-medium">Đang tải...</p>
                 </div>
             </div>
         )
@@ -159,252 +146,402 @@ export function CustomerLayout({ children }: CustomerLayoutProps) {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
-            {/* Mobile sidebar overlay */}
-            {sidebarOpen && (
-                <div 
-                    className="fixed inset-0 z-40 bg-gray-900/50 backdrop-blur-sm transition-opacity lg:hidden"
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
-
-            {/* Mobile sidebar */}
-            <div className={cn(
-                "fixed inset-y-0 left-0 z-50 w-72 bg-white/95 backdrop-blur-xl shadow-2xl transform transition-transform duration-300 ease-in-out lg:hidden border-r border-gray-200/50",
-                sidebarOpen ? "translate-x-0" : "-translate-x-full"
-            )}>
-                <div className="flex items-center justify-between p-6 border-b border-gray-200/50 bg-gradient-to-r from-blue-600 to-purple-600">
-                    <div className="flex items-center space-x-3">
-                        <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
-                            <Activity className="text-white" size={20} />
-                        </div>
-                        <div>
-                            <span className="text-xl font-bold text-white">
-                                ShuttleSync
-                            </span>
-                            <p className="text-xs text-blue-100">Hệ thống đặt sân</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => setSidebarOpen(false)}
-                        className="p-2 rounded-lg hover:bg-white/20 transition-colors"
-                    >
-                        <X size={20} className="text-white" />
-                    </button>
-                </div>
-                <SidebarContent pathname={pathname} user={user} userProfile={userProfile} unreadNotifications={unreadNotifications} onLogout={handleLogout} />
-            </div>
-
-            {/* Desktop sidebar */}
-            <div className="hidden lg:flex lg:flex-col lg:w-72 lg:fixed lg:inset-y-0">
-                <div className="bg-white/95 backdrop-blur-xl shadow-xl border-r border-gray-200/50">
-                    <div className="p-6 border-b border-gray-200/50 bg-gradient-to-r from-blue-600 to-purple-600">
-                        <div className="flex items-center space-x-3">
-                            <div className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg">
-                                <Activity className="text-white" size={24} />
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold text-white">
-                                    ShuttleSync
-                                </h1>
-                                <p className="text-xs text-blue-100">Hệ thống đặt sân cầu lông</p>
-                            </div>
-                        </div>
-                    </div>
-                    <SidebarContent pathname={pathname} user={user} userProfile={userProfile} unreadNotifications={unreadNotifications} onLogout={handleLogout} />
-                </div>
-            </div>
-
-            {/* Main content */}
-            <div className="lg:pl-72">
-                {/* Top header */}
-                <header className="bg-white/90 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-30">
-                    <div className="px-4 sm:px-6 lg:px-8">
-                        <div className="flex items-center justify-between h-16">
-                            {/* Mobile menu button */}
-                            <button
-                                onClick={() => setSidebarOpen(true)}
-                                className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                            >
-                                <Menu size={20} className="text-gray-600" />
-                            </button>
-
-                            {/* Search bar */}
-                            <div className="flex-1 max-w-lg mx-4">
-                                <div className="relative group">
-                                    <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Tìm kiếm sân, dịch vụ, khuyến mãi..."
-                                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 rounded-xl border-0 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:shadow-lg transition-all duration-200 text-sm placeholder-gray-400"
-                                    />
+        <div className="min-h-screen bg-gray-50">
+            {/* Top Header */}
+            <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
+                {/* Top bar with contact info */}
+                <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center space-x-6">
+                                <div className="flex items-center space-x-2">
+                                    <Phone size={14} />
+                                    <span>Hotline: 1900-123-456</span>
+                                </div>
+                                <div className="hidden md:flex items-center space-x-2">
+                                    <Clock size={14} />
+                                    <span>Mở cửa: 5:00 - 23:00 hàng ngày</span>
                                 </div>
                             </div>
+                            <div className="flex items-center space-x-4">
+                                <div className="hidden md:flex items-center space-x-3">
+                                    <Facebook size={16} className="hover:text-blue-200 cursor-pointer transition-colors" />
+                                    <Instagram size={16} className="hover:text-pink-200 cursor-pointer transition-colors" />
+                                    <Twitter size={16} className="hover:text-blue-200 cursor-pointer transition-colors" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                            {/* User menu */}
-                            <div className="flex items-center space-x-3">
-                                <button className="p-2.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 relative group">
-                                    <Bell size={18} />
-                                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-                                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-ping"></span>
-                                </button>
+                {/* Main header */}
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-between h-16">
+                        {/* Logo */}
+                        <div className="flex items-center">
+                            <Link href="/customer/dashboard" className="flex items-center space-x-3 group">
+                                <div className="relative">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
+                                        <Activity className="text-white" size={20} />
+                                    </div>
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                        ShuttleSync
+                                    </h1>
+                                    <p className="text-xs text-gray-500 -mt-1">Sân cầu lông cao cấp</p>
+                                </div>
+                            </Link>
+                        </div>
+
+                        {/* Desktop Navigation */}
+                        <nav className="hidden md:flex items-center space-x-8">
+                            {navigation.map((item) => {
+                                const isActive = pathname === item.href
+                                const Icon = item.icon
                                 
-                                <div className="flex items-center space-x-3 pl-3 border-l border-gray-200">
+                                return (
+                                    <Link
+                                        key={item.name}
+                                        href={item.href}
+                                        className={cn(
+                                            "relative flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 group",
+                                            isActive
+                                                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg"
+                                                : "text-gray-700 hover:text-blue-600 hover:bg-blue-50"
+                                        )}
+                                    >
+                                        <Icon size={18} className={cn(
+                                            "transition-colors",
+                                            isActive ? "text-white" : "text-gray-400 group-hover:text-blue-500"
+                                        )} />
+                                        <span>{item.name}</span>
+                                        {isActive && (
+                                            <div className="absolute inset-0 bg-white/10 rounded-full"></div>
+                                        )}
+                                    </Link>
+                                )
+                            })}
+                        </nav>
+
+                        {/* Right side */}
+                        <div className="flex items-center space-x-4">
+                            {/* Search */}
+                            <div className="hidden lg:block relative">
+                                <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Tìm sân, dịch vụ..."
+                                    className="pl-10 pr-4 py-2 w-64 bg-gray-50 rounded-full border-0 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:shadow-lg transition-all duration-200 text-sm"
+                                />
+                            </div>
+
+                            {/* Notifications */}
+                            <Link
+                                href="/customer/notifications"
+                                className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all duration-200"
+                            >
+                                <Bell size={20} />
+                                {unreadNotifications > 0 && (
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                                        {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                                    </div>
+                                )}
+                            </Link>
+
+                            {/* User Menu */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                                    className="flex items-center space-x-3 p-2 rounded-full hover:bg-gray-50 transition-colors"
+                                >
                                     <div className="relative">
                                         <img 
                                             src={userProfile.avatar} 
                                             alt={user.fullName}
-                                            className="w-9 h-9 rounded-full ring-2 ring-blue-500 shadow-md"
+                                            className="w-8 h-8 rounded-full ring-2 ring-blue-500"
                                         />
-                                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white shadow-sm"></div>
+                                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
                                     </div>
-                                    <div className="hidden md:block">
+                                    <div className="hidden md:block text-left">
                                         <p className="text-sm font-semibold text-gray-800">{user.fullName}</p>
                                         <div className="flex items-center space-x-1">
                                             <Crown size={12} className="text-yellow-500" />
-                                            <span className="text-xs text-gray-500 font-medium">{userProfile.membershipLevel} Member</span>
+                                            <span className="text-xs text-gray-500">{userProfile.membershipLevel}</span>
                                         </div>
                                     </div>
+                                    <ChevronDown size={16} className={cn(
+                                        "text-gray-400 transition-transform duration-200",
+                                        userMenuOpen ? "rotate-180" : ""
+                                    )} />
+                                </button>
+
+                                {/* User Dropdown */}
+                                {userMenuOpen && (
+                                    <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50">
+                                        <div className="px-4 py-3 border-b border-gray-100">
+                                            <div className="flex items-center space-x-3">
+                                                <img 
+                                                    src={userProfile.avatar} 
+                                                    alt={user.fullName}
+                                                    className="w-12 h-12 rounded-full"
+                                                />
+                                                <div>
+                                                    <p className="font-semibold text-gray-800">{user.fullName}</p>
+                                                    <p className="text-sm text-gray-500">{user.email}</p>
+                                                    <div className="flex items-center space-x-2 mt-1">
+                                                        <div className="flex items-center bg-yellow-100 px-2 py-1 rounded-lg">
+                                                            <Crown size={12} className="text-yellow-600" />
+                                                            <span className="text-xs text-yellow-700 font-medium ml-1">{userProfile.membershipLevel}</span>
+                                                        </div>
+                                                        <div className="flex items-center bg-blue-100 px-2 py-1 rounded-lg">
+                                                            <Zap size={12} className="text-blue-600" />
+                                                            <span className="text-xs text-blue-700 font-medium ml-1">{userProfile.points} điểm</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="py-2">
+                                            <Link
+                                                href="/customer/profile"
+                                                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                                onClick={() => setUserMenuOpen(false)}
+                                            >
+                                                <User size={16} className="mr-3 text-gray-400" />
+                                                Thông tin cá nhân
+                                            </Link>
+                                            <Link
+                                                href="/customer/notifications"
+                                                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                                onClick={() => setUserMenuOpen(false)}
+                                            >
+                                                <Bell size={16} className="mr-3 text-gray-400" />
+                                                Thông báo
+                                                {unreadNotifications > 0 && (
+                                                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                                                        {unreadNotifications}
+                                                    </span>
+                                                )}
+                                            </Link>
+                                            <Link
+                                                href="/customer/settings"
+                                                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                                onClick={() => setUserMenuOpen(false)}
+                                            >
+                                                <Settings size={16} className="mr-3 text-gray-400" />
+                                                Cài đặt
+                                            </Link>
+                                        </div>
+                                        
+                                        <div className="border-t border-gray-100 py-2">
+                                            <button
+                                                onClick={() => {
+                                                    setUserMenuOpen(false)
+                                                    handleLogout()
+                                                }}
+                                                className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                            >
+                                                <LogOut size={16} className="mr-3" />
+                                                Đăng xuất
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Mobile menu button */}
+                            <button
+                                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                                className="md:hidden p-2 rounded-lg text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            >
+                                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Mobile Navigation */}
+                {mobileMenuOpen && (
+                    <div className="md:hidden bg-white border-t border-gray-100 shadow-lg">
+                        <div className="px-4 py-4 space-y-2">
+                            {navigation.map((item) => {
+                                const isActive = pathname === item.href
+                                const Icon = item.icon
+                                
+                                return (
+                                    <Link
+                                        key={item.name}
+                                        href={item.href}
+                                        onClick={() => setMobileMenuOpen(false)}
+                                        className={cn(
+                                            "flex items-center space-x-3 px-4 py-3 rounded-xl transition-colors",
+                                            isActive
+                                                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
+                                                : "text-gray-700 hover:bg-gray-50"
+                                        )}
+                                    >
+                                        <Icon size={20} />
+                                        <div>
+                                            <div className="font-medium">{item.name}</div>
+                                            <div className={cn(
+                                                "text-xs",
+                                                isActive ? "text-blue-100" : "text-gray-500"
+                                            )}>
+                                                {item.description}
+                                            </div>
+                                        </div>
+                                    </Link>
+                                )
+                            })}
+                        </div>
+                        
+                        {/* Mobile Search */}
+                        <div className="px-4 pb-4">
+                            <div className="relative">
+                                <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Tìm sân, dịch vụ..."
+                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl border-0 focus:bg-white focus:ring-2 focus:ring-blue-500 text-sm"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </header>
+
+            {/* Main Content */}
+            <main className="min-h-[calc(100vh-200px)]">
+                {children}
+            </main>
+
+            {/* Footer */}
+            <footer className="bg-white border-t border-gray-200 mt-16">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        {/* Company Info */}
+                        <div className="space-y-4">
+                            <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                                    <Activity className="text-white" size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                        ShuttleSync
+                                    </h3>
+                                    <p className="text-xs text-gray-500">Sân cầu lông cao cấp</p>
+                                </div>
+                            </div>
+                            <p className="text-gray-600 text-sm leading-relaxed">
+                                Hệ thống sân cầu lông hiện đại với dịch vụ đặt sân trực tuyến tiện lợi. 
+                                Mang đến trải nghiệm thể thao tuyệt vời cho mọi khách hàng.
+                            </p>
+                            <div className="flex space-x-3">
+                                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center hover:bg-blue-200 cursor-pointer transition-colors">
+                                    <Facebook size={16} className="text-blue-600" />
+                                </div>
+                                <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center hover:bg-pink-200 cursor-pointer transition-colors">
+                                    <Instagram size={16} className="text-pink-600" />
+                                </div>
+                                <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center hover:bg-sky-200 cursor-pointer transition-colors">
+                                    <Twitter size={16} className="text-sky-600" />
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </header>
 
-                {/* Page content */}
-                <main className="min-h-[calc(100vh-4rem)]">
-                    {children}
-                </main>
-            </div>
-        </div>
-    )
-}
-
-function SidebarContent({ pathname, user, userProfile, unreadNotifications, onLogout }: { 
-    pathname: string, 
-    user: UserData, 
-    userProfile: any,
-    unreadNotifications: number,
-    onLogout: () => void 
-}) {
-    const MembershipIcon = userProfile.membershipIcon
-
-    return (
-        <div className="flex flex-col h-full">
-            {/* User profile section */}
-            <div className="p-6 border-b border-gray-200/50 bg-gradient-to-br from-blue-50 to-purple-50">
-                <div className="flex items-center space-x-4">
-                    <div className="relative">
-                        <img 
-                            src={userProfile.avatar} 
-                            alt={user.fullName}
-                            className="w-14 h-14 rounded-2xl ring-2 ring-blue-500 shadow-lg"
-                        />
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-400 rounded-full border-2 border-white shadow-sm flex items-center justify-center">
-                            <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                        {/* Quick Links */}
+                        <div>
+                            <h4 className="font-semibold text-gray-800 mb-4">Liên kết nhanh</h4>
+                            <ul className="space-y-2">
+                                {navigation.map((item) => (
+                                    <li key={item.name}>
+                                        <Link
+                                            href={item.href}
+                                            className="text-gray-600 hover:text-blue-600 text-sm transition-colors"
+                                        >
+                                            {item.name}
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-800 truncate">{user.fullName}</p>
-                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                        <div className="flex items-center mt-2 space-x-2">
-                            <div className="flex items-center bg-yellow-100 px-2 py-1 rounded-lg">
-                                <MembershipIcon size={12} className={userProfile.membershipColor} />
-                                <span className="text-xs text-yellow-700 font-bold ml-1">{userProfile.membershipLevel}</span>
-                            </div>
-                            <div className="flex items-center bg-blue-100 px-2 py-1 rounded-lg">
-                                <Zap size={12} className="text-blue-600" />
-                                <span className="text-xs text-blue-700 font-bold ml-1">{userProfile.points}</span>
+
+                        {/* Contact Info */}
+                        <div>
+                            <h4 className="font-semibold text-gray-800 mb-4">Liên hệ</h4>
+                            <ul className="space-y-3">
+                                <li className="flex items-center space-x-3 text-sm text-gray-600">
+                                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                                        <Phone size={14} className="text-green-600" />
+                                    </div>
+                                    <span>Hotline: 1900-123-456</span>
+                                </li>
+                                <li className="flex items-center space-x-3 text-sm text-gray-600">
+                                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <Mail size={14} className="text-blue-600" />
+                                    </div>
+                                    <span>info@shuttlesync.com</span>
+                                </li>
+                                <li className="flex items-center space-x-3 text-sm text-gray-600">
+                                    <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                                        <MapPin size={14} className="text-red-600" />
+                                    </div>
+                                    <span>123 Đường ABC, Quận 1, TP.HCM</span>
+                                </li>
+                                <li className="flex items-center space-x-3 text-sm text-gray-600">
+                                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                                        <Clock size={14} className="text-purple-600" />
+                                    </div>
+                                    <span>Mở cửa: 5:00 - 23:00</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* Newsletter */}
+                        <div>
+                            <h4 className="font-semibold text-gray-800 mb-4">Nhận thông tin mới</h4>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Đăng ký để nhận thông tin khuyến mãi và ưu đãi mới nhất
+                            </p>
+                            <div className="space-y-3">
+                                <input
+                                    type="email"
+                                    placeholder="Email của bạn"
+                                    className="w-full px-4 py-2 bg-gray-50 rounded-lg border-0 focus:bg-white focus:ring-2 focus:ring-blue-500 text-sm"
+                                />
+                                <button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:shadow-lg transition-all duration-200">
+                                    Đăng ký ngay
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 p-4 space-y-1">
-                {navigation.map((item) => {
-                    const isActive = pathname === item.href
-                    const Icon = item.icon
-                    const isNotificationPage = item.href === "/customer/notifications"
-                    
-                    return (
-                        <Link
-                            key={item.name}
-                            href={item.href}
-                            className={cn(
-                                "group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 relative overflow-hidden",
-                                isActive
-                                    ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/25 transform scale-[1.02]"
-                                    : "text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 hover:text-blue-700 hover:scale-[1.01]"
-                            )}
-                        >
-                            <Icon
-                                className={cn(
-                                    "mr-3 h-5 w-5 transition-all duration-200",
-                                    isActive ? "text-white" : "text-gray-400 group-hover:text-blue-500"
-                                )}
-                            />
-                            <div className="flex-1">
-                                <div className="font-medium">{item.name}</div>
-                                <div className={cn(
-                                    "text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200",
-                                    isActive ? "text-blue-100" : "text-gray-500"
-                                )}>
-                                    {item.description}
-                                </div>
+                {/* Bottom Bar */}
+                <div className="border-t border-gray-200 bg-gray-50">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                        <div className="flex flex-col md:flex-row items-center justify-between text-sm text-gray-600">
+                            <p>© 2024 ShuttleSync. Tất cả quyền được bảo lưu.</p>
+                            <div className="flex space-x-6 mt-2 md:mt-0">
+                                <Link href="#" className="hover:text-blue-600 transition-colors">Điều khoản sử dụng</Link>
+                                <Link href="#" className="hover:text-blue-600 transition-colors">Chính sách bảo mật</Link>
+                                <Link href="#" className="hover:text-blue-600 transition-colors">Hỗ trợ</Link>
                             </div>
-                            
-                            {/* Notification badge */}
-                            {isNotificationPage && unreadNotifications > 0 && (
-                                <div className="ml-2">
-                                    <div className={cn(
-                                        "px-2 py-1 rounded-full text-xs font-bold min-w-[20px] text-center",
-                                        isActive 
-                                            ? "bg-white text-blue-600" 
-                                            : "bg-red-500 text-white"
-                                    )}>
-                                        {unreadNotifications > 99 ? '99+' : unreadNotifications}
-                                    </div>
-                                </div>
-                            )}
-                            
-                            {isActive && !isNotificationPage && (
-                                <div className="ml-2">
-                                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                                </div>
-                            )}
-                            {isActive && (
-                                <div className="absolute inset-0 bg-white/10 rounded-xl"></div>
-                            )}
-                        </Link>
-                    )
-                })}
-            </nav>
+                        </div>
+                    </div>
+                </div>
+            </footer>
 
-            {/* Bottom section */}
-            <div className="p-4 border-t border-gray-200/50 space-y-1">
-                <Link
-                    href="/customer/settings"
-                    className="group flex items-center px-4 py-3 text-sm font-medium text-gray-700 rounded-xl hover:bg-gray-50 hover:text-gray-900 transition-all duration-200"
-                >
-                    <Settings className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
-                    <div>
-                        <div className="font-medium">Cài đặt</div>
-                        <div className="text-xs text-gray-500 group-hover:text-gray-600">Tùy chỉnh ứng dụng</div>
-                    </div>
-                </Link>
-                <button 
-                    onClick={onLogout}
-                    className="w-full group flex items-center px-4 py-3 text-sm font-medium text-red-600 rounded-xl hover:bg-red-50 hover:text-red-700 transition-all duration-200"
-                >
-                    <LogOut className="mr-3 h-5 w-5 text-red-400 group-hover:text-red-600 transition-colors" />
-                    <div className="text-left">
-                        <div className="font-medium">Đăng xuất</div>
-                        <div className="text-xs text-red-400 group-hover:text-red-500">Thoát khỏi tài khoản</div>
-                    </div>
-                </button>
-            </div>
+            {/* Click outside to close user menu */}
+            {userMenuOpen && (
+                <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setUserMenuOpen(false)}
+                />
+            )}
         </div>
     )
 }

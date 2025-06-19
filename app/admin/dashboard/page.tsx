@@ -19,38 +19,88 @@ import {
     TrendingUp,
     Filter,
     RefreshCw,
-    Activity
+    Activity,
+    User,
+    UserCheck,
+    MapPin,
+    Settings,
+    FileText,
+    Gift,
+    BarChart3,
+    PieChart,
+    LineChart,
+    ArrowUpDown,
+    Download,
+    Printer
 } from "lucide-react"
-
-interface Booking {
-    id: number
-    userName: string
-    courtName: string
-    bookingDate: string
-    startTime: string
-    endTime: string
-    status: string
-}
+import axios from "axios"
 
 interface DashboardStats {
     totalBookings: number
     todayBookings: number
     totalUsers: number
     totalRevenue: number
+    adminUsers: number
+    customerUsers: number
+    recentUsers: number
+    totalCourts: number
+    activeCourts: number
+    totalInvoices: number
+    paidInvoices: number
+    pendingInvoices: number
+    avgInvoiceValue: number
+    totalServices: number
+    activeServices: number
+    totalVouchers: number
+    activeVouchers: number
 }
 
+interface RecentActivity {
+    id: number
+    type: string
+    description: string
+    timestamp: string
+    user?: string
+}
+
+const API_URL = 'http://localhost:8080/api'
+
+const getAuthHeader = () => {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return {};
+    
+    const user = JSON.parse(userStr);
+    return {
+        headers: {
+            'Authorization': `Bearer ${user.token}`
+        }
+    };
+};
+
 export default function AdminDashboard() {
-    const [dateFilter, setDateFilter] = useState<string>("all")
-    const [statusFilter, setStatusFilter] = useState<string>("all")
-    const [bookings, setBookings] = useState<Booking[]>([])
     const [stats, setStats] = useState<DashboardStats>({
         totalBookings: 0,
         todayBookings: 0,
         totalUsers: 0,
-        totalRevenue: 0
+        totalRevenue: 0,
+        adminUsers: 0,
+        customerUsers: 0,
+        recentUsers: 0,
+        totalCourts: 0,
+        activeCourts: 0,
+        totalInvoices: 0,
+        paidInvoices: 0,
+        pendingInvoices: 0,
+        avgInvoiceValue: 0,
+        totalServices: 0,
+        activeServices: 0,
+        totalVouchers: 0,
+        activeVouchers: 0
     })
+    const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
+    const [dateRange, setDateRange] = useState("7days")
 
     useEffect(() => {
         // Kiểm tra xác thực và quyền admin
@@ -69,7 +119,7 @@ export default function AdminDashboard() {
                     return;
                 }
 
-                // Nếu xác thực thành công, tải dữ liệu dashboard
+                // Nếu xác thực thành công, tải dữ liệu
                 fetchDashboardData();
             } catch (error) {
                 console.error('Lỗi khi kiểm tra xác thực:', error);
@@ -81,76 +131,149 @@ export default function AdminDashboard() {
     }, []);
 
     useEffect(() => {
-        if (dateFilter !== "all" || statusFilter !== "all") {
+        if (!loading) {
             fetchDashboardData();
         }
-    }, [dateFilter, statusFilter]);
+    }, [dateRange]);
 
     const fetchDashboardData = async (isRefresh = false) => {
         try {
             if (isRefresh) {
                 setRefreshing(true);
-            }
-
-            // Lấy token từ localStorage
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            const token = user.token;
-
-            if (!token) {
-                console.error('Không tìm thấy token, vui lòng đăng nhập lại');
-                window.location.href = '/login';
-                return;
-            }
-
-            const authHeader = {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            };
-
-            if (!isRefresh) {
+            } else {
                 setLoading(true);
             }
 
-            // Fetch bookings
-            console.log("Đang gọi API bookings...");
-            const bookingsResponse = await fetch('http://localhost:8080/api/admin/bookings/recent', {
-                headers: authHeader
-            });
-            console.log("Status API bookings:", bookingsResponse.status);
+            const authHeader = getAuthHeader();
 
-            if (!bookingsResponse.ok) {
-                console.error('API bookings trả về lỗi:', bookingsResponse.status, bookingsResponse.statusText);
-                if (bookingsResponse.status === 401 || bookingsResponse.status === 403) {
-                    window.location.href = '/login';
-                }
-                return;
+            // Fetch tất cả thống kê từ các API khác nhau
+            const [
+                bookingStatsResponse,
+                userStatsResponse,
+                courtStatsResponse,
+                invoiceStatsResponse,
+                serviceStatsResponse,
+                voucherStatsResponse
+            ] = await Promise.allSettled([
+                axios.get(`${API_URL}/admin/bookings/stats`, authHeader),
+                axios.get(`${API_URL}/users`, authHeader), // Lấy danh sách users để tính toán
+                axios.get(`${API_URL}/courts`, authHeader), // Lấy danh sách courts để tính toán
+                axios.get(`${API_URL}/admin/invoices`, authHeader), // Lấy danh sách invoices để tính toán
+                axios.get(`${API_URL}/service/services`, authHeader), // Lấy danh sách services để tính toán
+                axios.get(`${API_URL}/admin/vouchers`, authHeader) // Lấy danh sách vouchers để tính toán
+            ]);
+
+            // Xử lý kết quả từ các API
+            let combinedStats: DashboardStats = {
+                totalBookings: 0,
+                todayBookings: 0,
+                totalUsers: 0,
+                totalRevenue: 0,
+                adminUsers: 0,
+                customerUsers: 0,
+                recentUsers: 0,
+                totalCourts: 0,
+                activeCourts: 0,
+                totalInvoices: 0,
+                paidInvoices: 0,
+                pendingInvoices: 0,
+                avgInvoiceValue: 0,
+                totalServices: 0,
+                activeServices: 0,
+                totalVouchers: 0,
+                activeVouchers: 0
+            };
+
+            // Booking stats
+            if (bookingStatsResponse.status === 'fulfilled' && bookingStatsResponse.value.data) {
+                const bookingData = bookingStatsResponse.value.data;
+                combinedStats.totalBookings = bookingData.totalBookings || 0;
+                combinedStats.todayBookings = bookingData.todayBookings || 0;
+                combinedStats.totalRevenue = bookingData.totalRevenue || 0;
             }
 
-            const bookingsData = await bookingsResponse.json();
-            console.log("Dữ liệu bookings:", bookingsData);
-            setBookings(bookingsData);
-
-            // Fetch stats
-            try {
-                console.log("Đang gọi API admin/stats...");
-                const statsResponse = await fetch('http://localhost:8080/api/admin/bookings/stats', {
-                    headers: authHeader
-                });
-                console.log("Status API stats:", statsResponse.status);
-
-                if (statsResponse.ok) {
-                    const statsData = await statsResponse.json();
-                    console.log("Dữ liệu stats:", statsData);
-                    setStats(statsData);
-                } else {
-                    console.error('API stats trả về lỗi:', statsResponse.status, statsResponse.statusText);
-                    if (statsResponse.status === 401 || statsResponse.status === 403) {
-                        window.location.href = '/login';
+            // User stats - tính toán từ danh sách users
+            if (userStatsResponse.status === 'fulfilled' && userStatsResponse.value.data) {
+                const users = Array.isArray(userStatsResponse.value.data) ? userStatsResponse.value.data : [];
+                combinedStats.totalUsers = users.length;
+                combinedStats.adminUsers = users.filter((u: any) => u.role === 'admin').length;
+                combinedStats.customerUsers = users.filter((u: any) => u.role === 'customer').length;
+                
+                // Tính users mới trong 30 ngày
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                combinedStats.recentUsers = users.filter((u: any) => {
+                    try {
+                        const createdDate = new Date(u.createdAt);
+                        return createdDate > thirtyDaysAgo;
+                    } catch {
+                        return false;
                     }
-                }
-            } catch (statsError) {
-                console.error('Lỗi khi gọi API stats:', statsError);
+                }).length;
             }
+
+            // Court stats - tính toán từ danh sách courts
+            if (courtStatsResponse.status === 'fulfilled' && courtStatsResponse.value.data) {
+                const courts = Array.isArray(courtStatsResponse.value.data) ? courtStatsResponse.value.data : [];
+                combinedStats.totalCourts = courts.length;
+                combinedStats.activeCourts = courts.filter((c: any) => 
+                    c.status && (c.status.id === 1 || c.status.name === 'Active')
+                ).length;
+            }
+
+            // Invoice stats - tính toán từ danh sách invoices
+            if (invoiceStatsResponse.status === 'fulfilled' && invoiceStatsResponse.value.data) {
+                const invoices = Array.isArray(invoiceStatsResponse.value.data) ? invoiceStatsResponse.value.data : [];
+                combinedStats.totalInvoices = invoices.length;
+                combinedStats.paidInvoices = invoices.filter((i: any) => i.status === 'Paid').length;
+                combinedStats.pendingInvoices = invoices.filter((i: any) => i.status === 'Pending').length;
+                
+                const totalRevenue = invoices
+                    .filter((i: any) => i.status === 'Paid')
+                    .reduce((sum: number, i: any) => sum + (i.finalAmount || 0), 0);
+                combinedStats.avgInvoiceValue = invoices.length > 0 ? totalRevenue / invoices.length : 0;
+            }
+
+            // Service stats - tính toán từ danh sách services
+            if (serviceStatsResponse.status === 'fulfilled' && serviceStatsResponse.value.data) {
+                const services = Array.isArray(serviceStatsResponse.value.data) ? serviceStatsResponse.value.data : [];
+                combinedStats.totalServices = services.length;
+                combinedStats.activeServices = services.filter((s: any) => s.isActive === true).length;
+            }
+
+            // Voucher stats - tính toán từ danh sách vouchers
+            if (voucherStatsResponse.status === 'fulfilled' && voucherStatsResponse.value.data) {
+                const vouchers = Array.isArray(voucherStatsResponse.value.data) ? voucherStatsResponse.value.data : [];
+                combinedStats.totalVouchers = vouchers.length;
+                combinedStats.activeVouchers = vouchers.filter((v: any) => v.status === 'active').length;
+            }
+
+            setStats(combinedStats);
+
+            // Mock recent activities
+            setRecentActivities([
+                {
+                    id: 1,
+                    type: 'booking',
+                    description: 'Đặt sân mới được tạo',
+                    timestamp: new Date().toISOString(),
+                    user: 'Nguyễn Văn A'
+                },
+                {
+                    id: 2,
+                    type: 'user',
+                    description: 'Người dùng mới đăng ký',
+                    timestamp: new Date(Date.now() - 3600000).toISOString(),
+                    user: 'Trần Thị B'
+                },
+                {
+                    id: 3,
+                    type: 'payment',
+                    description: 'Thanh toán được xử lý',
+                    timestamp: new Date(Date.now() - 7200000).toISOString(),
+                    user: 'Lê Văn C'
+                }
+            ]);
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
@@ -164,280 +287,245 @@ export default function AdminDashboard() {
         fetchDashboardData(true);
     }
 
-    // Lọc đặt sân dựa trên bộ lọc đã chọn
-    const filteredBookings = bookings.filter((booking) => {
-        if (dateFilter !== "all") {
-            const today = new Date()
-            const tomorrow = new Date(today)
-            tomorrow.setDate(tomorrow.getDate() + 1)
-
-            if (dateFilter === "today" && format(new Date(booking.bookingDate), "yyyy-MM-dd") !== format(today, "yyyy-MM-dd")) {
-                return false
-            }
-            if (dateFilter === "tomorrow" && format(new Date(booking.bookingDate), "yyyy-MM-dd") !== format(tomorrow, "yyyy-MM-dd")) {
-                return false
-            }
-        }
-
-        if (statusFilter !== "all" && booking.status !== statusFilter) {
-            return false
-        }
-
-        return true
-    })
-
-    // Ánh xạ trạng thái sang tiếng Việt
-    const getStatusText = (status: string) => {
-        switch (status) {
-            case "1":
-                return "Đang chờ"
-            case "2":
-                return "Đã xác nhận"
-            case "3":
-                return "Đã hủy"
-            default:
-                return "Không xác định"
-        }
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('vi-VN', {
+            style: 'currency',
+            currency: 'VND'
+        }).format(amount);
     }
 
-    const statsCards = [
-        {
-            title: "Tổng Đặt Sân",
-            value: stats.totalBookings,
-            icon: Calendar,
-            color: "bg-blue-500",
-            bgColor: "bg-blue-50",
-            textColor: "text-blue-600",
-            trend: "+12%"
-        },
-        {
-            title: "Đặt Sân Hôm Nay",
-            value: stats.todayBookings,
-            icon: Clock,
-            color: "bg-green-500",
-            bgColor: "bg-green-50",
-            textColor: "text-green-600",
-            trend: "+8%"
-        },
-        {
-            title: "Tổng Người Dùng",
-            value: stats.totalUsers,
-            icon: Users,
-            color: "bg-purple-500",
-            bgColor: "bg-purple-50",
-            textColor: "text-purple-600",
-            trend: "+5%"
-        },
-        {
-            title: "Doanh Thu",
-            value: `${(stats.totalRevenue || 0).toLocaleString('vi-VN')} VNĐ`,
-            icon: DollarSign,
-            color: "bg-orange-500",
-            bgColor: "bg-orange-50",
-            textColor: "text-orange-600",
-            trend: "+15%"
-        }
-    ]
+    const StatCard = ({ title, value, icon: Icon, color, trend, description }: any) => (
+        <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-sm hover:shadow-xl transition-all duration-300">
+            <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                        <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
+                            <Icon className={`h-6 w-6 ${color.replace('bg-', 'text-')}`} />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-slate-600">{title}</p>
+                            <p className="text-2xl font-bold text-slate-900">{value}</p>
+                            {description && (
+                                <p className="text-xs text-slate-500 mt-1">{description}</p>
+                            )}
+                        </div>
+                    </div>
+                    {trend && (
+                        <div className="flex items-center text-green-600">
+                            <TrendingUp className="h-4 w-4 mr-1" />
+                            <span className="text-sm font-medium">{trend}</span>
+                        </div>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    )
+
+    if (loading) {
+        return (
+            <AdminLayout>
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-4 text-slate-600">Đang tải dữ liệu thống kê...</p>
+                    </div>
+                </div>
+            </AdminLayout>
+        )
+    }
 
     return (
         <AdminLayout>
             <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
                 <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
-                    {/* Header Section */}
+                    {/* Header */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
                         <div>
                             <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-blue-800 to-indigo-600 bg-clip-text text-transparent mb-2">
-                                Tổng Quan Quản Trị
+                                Dashboard - Tổng Quan Hệ Thống
                             </h1>
                             <p className="text-slate-600 text-lg">
-                                Theo dõi và quản lý hoạt động đặt sân Cầu lông
+                                Thống kê tổng hợp và phân tích chi tiết về hoạt động hệ thống ShuttleSync
                             </p>
                         </div>
+                        <div className="flex space-x-3 mt-4 sm:mt-0">
+                            <Select value={dateRange} onValueChange={setDateRange}>
+                                <SelectTrigger className="w-40">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="7days">7 ngày qua</SelectItem>
+                                    <SelectItem value="30days">30 ngày qua</SelectItem>
+                                    <SelectItem value="90days">3 tháng qua</SelectItem>
+                                    <SelectItem value="1year">1 năm qua</SelectItem>
+                                </SelectContent>
+                            </Select>
                         <Button
                             onClick={handleRefresh}
                             disabled={refreshing}
-                            className="mt-4 sm:mt-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                                variant="outline"
+                                className="border-slate-300 hover:border-slate-400"
                         >
-                            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                             {refreshing ? 'Đang tải...' : 'Làm mới'}
                         </Button>
+                            <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                                <Download className="w-4 h-4 mr-2" />
+                                Xuất báo cáo
+                            </Button>
+                        </div>
                     </div>
 
-                    {/* Stats Cards */}
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-                        {statsCards.map((stat, index) => {
-                            const IconComponent = stat.icon;
-                            return (
-                                <Card key={index} className="group hover:shadow-2xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-                                    <CardContent className="p-6">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-slate-600 mb-1">
-                                                    {stat.title}
-                                                </p>
-                                                <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                                                    {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
-                                                </h3>
-                                                <div className="flex items-center text-sm">
-                                                    <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
-                                                    <span className="text-green-600 font-medium">{stat.trend}</span>
-                                                    <span className="text-slate-500 ml-1">từ tháng trước</span>
+                    {/* Main Stats Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <StatCard
+                            title="Tổng Đặt Sân"
+                            value={stats.totalBookings.toLocaleString()}
+                            icon={Calendar}
+                            color="bg-blue-500 text-blue-600"
+                            trend="+12%"
+                            description="Tất cả thời gian"
+                        />
+                        <StatCard
+                            title="Đặt Sân Hôm Nay"
+                            value={stats.todayBookings.toLocaleString()}
+                            icon={Clock}
+                            color="bg-green-500 text-green-600"
+                            trend="+8%"
+                            description="Trong ngày"
+                        />
+                        <StatCard
+                            title="Tổng Người Dùng"
+                            value={stats.totalUsers.toLocaleString()}
+                            icon={Users}
+                            color="bg-purple-500 text-purple-600"
+                            trend="+5%"
+                            description={`${stats.adminUsers} admin, ${stats.customerUsers} khách hàng`}
+                        />
+                        <StatCard
+                            title="Doanh Thu"
+                            value={formatCurrency(stats.totalRevenue)}
+                            icon={DollarSign}
+                            color="bg-orange-500 text-orange-600"
+                            trend="+15%"
+                            description="Tổng thu nhập"
+                        />
+                    </div>
+
+                    {/* Secondary Stats Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <StatCard
+                            title="Sân Hoạt Động"
+                            value={`${stats.activeCourts}/${stats.totalCourts}`}
+                            icon={MapPin}
+                            color="bg-teal-500 text-teal-600"
+                            description="Sân đang sử dụng"
+                        />
+                        <StatCard
+                            title="Hóa Đơn"
+                            value={`${stats.paidInvoices}/${stats.totalInvoices}`}
+                            icon={FileText}
+                            color="bg-indigo-500 text-indigo-600"
+                            description={`${stats.pendingInvoices} chờ thanh toán`}
+                        />
+                        <StatCard
+                            title="Dịch Vụ"
+                            value={`${stats.activeServices}/${stats.totalServices}`}
+                            icon={Settings}
+                            color="bg-pink-500 text-pink-600"
+                            description="Dịch vụ đang cung cấp"
+                        />
+                        <StatCard
+                            title="Voucher"
+                            value={`${stats.activeVouchers}/${stats.totalVouchers}`}
+                            icon={Gift}
+                            color="bg-amber-500 text-amber-600"
+                            description="Mã giảm giá hiệu lực"
+                        />
+                    </div>
+
+                    {/* Charts Section */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-sm">
+                            <CardHeader>
+                                <CardTitle className="flex items-center">
+                                    <BarChart3 className="h-5 w-5 mr-2 text-blue-600" />
+                                    Biểu Đồ Doanh Thu
+                                </CardTitle>
+                                <CardDescription>Doanh thu 7 ngày gần nhất</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="h-64 flex items-center justify-center text-slate-500">
+                                    <div className="text-center">
+                                        <LineChart className="h-16 w-16 mx-auto mb-4 text-slate-300" />
+                                        <p>Biểu đồ sẽ được hiển thị tại đây</p>
+                                        <p className="text-sm">Tích hợp với thư viện chart</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-sm">
+                            <CardHeader>
+                                <CardTitle className="flex items-center">
+                                    <PieChart className="h-5 w-5 mr-2 text-green-600" />
+                                    Phân Bố Đặt Sân
+                                </CardTitle>
+                                <CardDescription>Theo trạng thái đặt sân</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="h-64 flex items-center justify-center text-slate-500">
+                                    <div className="text-center">
+                                        <PieChart className="h-16 w-16 mx-auto mb-4 text-slate-300" />
+                                        <p>Biểu đồ tròn sẽ được hiển thị tại đây</p>
+                                        <p className="text-sm">Tích hợp với thư viện chart</p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Recent Activities */}
+                    <Card className="border-0 shadow-lg bg-white/90 backdrop-blur-sm">
+                        <CardHeader>
+                            <CardTitle className="flex items-center">
+                                <Activity className="h-5 w-5 mr-2 text-purple-600" />
+                                Hoạt Động Gần Đây
+                            </CardTitle>
+                            <CardDescription>Các hoạt động mới nhất trong hệ thống</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {recentActivities.length > 0 ? (
+                                <div className="space-y-4">
+                                    {recentActivities.map((activity) => (
+                                        <div key={activity.id} className="flex items-center space-x-4 p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
+                                            <div className="flex-shrink-0">
+                                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                                    <Activity className="w-4 h-4 text-blue-600" />
                                                 </div>
                                             </div>
-                                            <div className={`p-3 rounded-2xl ${stat.bgColor} group-hover:scale-110 transition-transform duration-200`}>
-                                                <IconComponent className={`h-6 w-6 ${stat.textColor}`} />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-slate-900">
+                                                    {activity.description}
+                                                </p>
+                                                {activity.user && (
+                                                    <p className="text-xs text-slate-500">
+                                                        bởi {activity.user}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="flex-shrink-0 text-xs text-slate-500">
+                                                {format(new Date(activity.timestamp), 'HH:mm dd/MM', { locale: vi })}
                                             </div>
                                         </div>
-                                    </CardContent>
-                                </Card>
-                            );
-                        })}
-                    </div>
-
-                    {/* Bookings Table */}
-                    <Card className="shadow-2xl border-0 bg-white/90 backdrop-blur-sm">
-                        <CardHeader className="bg-gradient-to-r from-slate-50 to-blue-50/50 border-b border-slate-200/50">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                                <div>
-                                    <CardTitle className="text-2xl font-bold text-slate-900 flex items-center">
-                                        <Activity className="h-6 w-6 mr-2 text-blue-600" />
-                                        Đặt Sân Gần Đây
-                                    </CardTitle>
-                                    <CardDescription className="text-slate-600 mt-1">
-                                        Quản lý và xem các đặt sân gần đây của khách hàng
-                                    </CardDescription>
+                                    ))}
                                 </div>
-                                <div className="flex items-center mt-4 sm:mt-0">
-                                    <Filter className="h-4 w-4 text-slate-500 mr-2" />
-                                    <span className="text-sm text-slate-600">
-                                        {filteredBookings.length} kết quả
-                                    </span>
+                            ) : (
+                                <div className="text-center py-8 text-slate-500">
+                                    <Activity className="h-12 w-12 mx-auto mb-4 text-slate-300" />
+                                    <p>Chưa có hoạt động nào được ghi nhận</p>
                                 </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            {/* Filters */}
-                            <div className="flex flex-col md:flex-row gap-4 mb-6">
-                                <Select value={dateFilter} onValueChange={setDateFilter}>
-                                    <SelectTrigger className="w-full md:w-[200px] border-slate-300 focus:border-blue-500 focus:ring-blue-500">
-                                        <SelectValue placeholder="Lọc theo ngày" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Tất cả ngày</SelectItem>
-                                        <SelectItem value="today">Hôm nay</SelectItem>
-                                        <SelectItem value="tomorrow">Ngày mai</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                    <SelectTrigger className="w-full md:w-[200px] border-slate-300 focus:border-blue-500 focus:ring-blue-500">
-                                        <SelectValue placeholder="Lọc theo trạng thái" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                                        <SelectItem value="1">Đang chờ</SelectItem>
-                                        <SelectItem value="2">Đã xác nhận</SelectItem>
-                                        <SelectItem value="3">Đã hủy</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Table */}
-                            <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                                <Table>
-                                    <TableHeader className="bg-slate-50/50">
-                                        <TableRow className="border-slate-200">
-                                            <TableHead className="font-semibold text-slate-700 w-16">STT</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Khách hàng</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Sân</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Ngày</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Giờ</TableHead>
-                                            <TableHead className="font-semibold text-slate-700">Trạng thái</TableHead>
-                                            <TableHead className="font-semibold text-slate-700 text-right">Thao tác</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {loading ? (
-                                            <TableRow>
-                                                <TableCell colSpan={7} className="text-center py-12">
-                                                    <div className="flex items-center justify-center">
-                                                        <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-                                                        <span className="text-slate-600">Đang tải dữ liệu...</span>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : filteredBookings.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={7} className="text-center py-12">
-                                                    <div className="text-slate-500">
-                                                        <Calendar className="h-12 w-12 mx-auto mb-4 text-slate-300" />
-                                                        <p className="text-lg font-medium">Không có dữ liệu</p>
-                                                        <p className="text-sm">Chưa có đặt sân nào phù hợp với bộ lọc</p>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            filteredBookings.map((booking, index) => (
-                                                <TableRow
-                                                    key={booking.id}
-                                                    className={`hover:bg-slate-50/50 transition-colors duration-150 ${
-                                                        index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
-                                                    }`}
-                                                >
-                                                    <TableCell className="font-medium text-slate-900">
-                                                        {index + 1}
-                                                    </TableCell>
-                                                    <TableCell className="font-medium text-slate-800">
-                                                        {booking.userName}
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-700">
-                                                        {booking.courtName}
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-700">
-                                                        {format(new Date(booking.bookingDate), "dd/MM/yyyy", { locale: vi })}
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-700">
-                                                        <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-sm font-medium">
-                                                            {`${booking.startTime} - ${booking.endTime}`}
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Badge
-                                                            variant={
-                                                                booking.status === "2"
-                                                                    ? "default"
-                                                                    : booking.status === "1"
-                                                                        ? "outline"
-                                                                        : "destructive"
-                                                            }
-                                                            className={`${
-                                                                booking.status === "2"
-                                                                    ? "bg-green-100 text-green-800 border-green-200"
-                                                                    : booking.status === "1"
-                                                                        ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                                                                        : "bg-red-100 text-red-800 border-red-200"
-                                                            }`}
-                                                        >
-                                                            {getStatusText(booking.status)}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex space-x-2">
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-colors duration-150"
-                                                            >
-                                                                <Eye className="h-4 w-4 mr-1" />
-                                                                Xem
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

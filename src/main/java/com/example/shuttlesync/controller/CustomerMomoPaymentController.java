@@ -86,7 +86,7 @@ public class CustomerMomoPaymentController {
             @RequestParam(required = false) String signature
     ) {
         try {
-            log.info("Momo return callback - orderId: {}, resultCode: {}", orderId, resultCode);
+            log.info("Momo return callback - orderId: {}, resultCode: {}, extraData: {}", orderId, resultCode, extraData);
             
             // Xử lý callback nếu có đủ thông tin
             if (orderId != null && resultCode != null) {
@@ -105,11 +105,26 @@ public class CustomerMomoPaymentController {
                 );
             }
             
-            // Chuyển hướng về frontend với parameters
-            String redirectUrl = String.format("http://localhost:3000/customer/payment?orderId=%s&resultCode=%s", 
-                orderId != null ? orderId : "", 
-                resultCode != null ? resultCode : ""
-            );
+            // Kiểm tra extraData để xác định admin hay customer payment
+            String redirectUrl;
+            if (extraData != null && extraData.contains("admin")) {
+                // Redirect về admin invoice detail với thông báo
+                if ("0".equals(resultCode)) {
+                    redirectUrl = String.format("http://localhost:3000/admin/invoices?paymentSuccess=true&orderId=%s&message=Thanh%%20toán%%20MoMo%%20thành%%20công", 
+                        orderId != null ? orderId : ""
+                    );
+                } else {
+                    redirectUrl = String.format("http://localhost:3000/admin/invoices?paymentSuccess=false&orderId=%s&message=Thanh%%20toán%%20MoMo%%20thất%%20bại", 
+                        orderId != null ? orderId : ""
+                    );
+                }
+            } else {
+                // Redirect về customer payment page
+                redirectUrl = String.format("http://localhost:3000/customer/payment?orderId=%s&resultCode=%s", 
+                    orderId != null ? orderId : "", 
+                    resultCode != null ? resultCode : ""
+                );
+            }
             
             return new RedirectView(redirectUrl);
         } catch (Exception e) {

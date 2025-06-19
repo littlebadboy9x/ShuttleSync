@@ -8,6 +8,7 @@ import com.example.shuttlesync.service.BookingService;
 import com.example.shuttlesync.service.EmailService;
 import com.example.shuttlesync.service.NotificationService;
 import com.example.shuttlesync.service.SystemChangeLogService;
+import com.example.shuttlesync.service.InvoiceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +40,7 @@ public class BookingServiceImpl implements BookingService {
     private final SystemChangeLogRepository systemChangeLogRepository;
     private final PaymentStatusTypeRepository paymentStatusTypeRepository;
     private final EmailService emailService;
+    private final InvoiceService invoiceService;
     
     @Override
     public List<Booking> getAllBookings() {
@@ -104,6 +106,19 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(waitingStatus);
         booking.setCreatedAt(LocalDateTime.now());
         
+        // Set booking channel và type cho customer booking
+        booking.setBookingChannel(Booking.BookingChannel.ONLINE);
+        booking.setCounterStaffId(null);
+        
+        // Set booking type dựa trên thời gian đặt
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime bookingDateTime = bookingDate.atTime(timeSlot.getStartTime());
+        if (bookingDateTime.isBefore(now.plusHours(2))) {
+            booking.setBookingType(Booking.BookingType.URGENT);
+        } else {
+            booking.setBookingType(Booking.BookingType.ADVANCE);
+        }
+        
         // Thêm các discount nếu có
         if (discountIds != null && !discountIds.isEmpty()) {
             Set<Discount> discounts = new HashSet<>();
@@ -124,12 +139,20 @@ public class BookingServiceImpl implements BookingService {
         // Lưu booking
         Booking savedBooking = bookingRepository.save(booking);
         
+        // Tạo invoice tự động cho booking
+        try {
+            invoiceService.createInvoice(savedBooking.getId());
+        } catch (Exception e) {
+            // Log lỗi nhưng không làm gián đoạn tạo booking
+            System.err.println("Failed to create invoice for booking " + savedBooking.getId() + ": " + e.getMessage());
+        }
+        
         // Tạo thông báo cho admin
         List<User> admins = userRepository.findByRole("admin");
         for (User admin : admins) {
             Notification notification = new Notification();
             notification.setUser(admin);
-            notification.setMessage("Có đặt sân mới từ " + user.getFullName() + " đang chờ xác nhận");
+            notification.setMessage("Có đặt sân mới từ " + user.getFullName() + " đang chờ xác nhận (Đặt online)");
             notification.setIsRead(false);
             notificationRepository.save(notification);
         }
@@ -147,7 +170,7 @@ public class BookingServiceImpl implements BookingService {
         log.setRecordId(savedBooking.getId());
         log.setChangeType("INSERT");
         log.setChangedFields(String.format(
-                "{\"UserId\":\"%d\",\"CourtId\":\"%d\",\"TimeSlotId\":\"%d\",\"BookingDate\":\"%s\"}",
+                "{\"UserId\":\"%d\",\"CourtId\":\"%d\",\"TimeSlotId\":\"%d\",\"BookingDate\":\"%s\",\"BookingChannel\":\"ONLINE\"}",
                 userId, courtId, timeSlotId, bookingDate));
         log.setChangedBy(user);
         systemChangeLogRepository.save(log);
@@ -445,7 +468,102 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate) {
-        return createBooking(userId, courtId, timeSlotId, bookingDate, null);
+        return createBookingWithChannel(userId, courtId, timeSlotId, bookingDate, Booking.BookingChannel.ONLINE, null);
+    }
+
+    @Override
+    @Transactional
+    public Booking createBookingWithChannel(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate, 
+                                          Booking.BookingChannel bookingChannel, Integer counterStaffId) {
+        // Lấy thông tin người dùng
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        
+        // Lấy thông tin sân
+        Court court = courtRepository.findById(courtId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân với ID: " + courtId));
+        
+        // Lấy thông tin khung giờ
+        TimeSlot timeSlot = timeSlotRepository.findById(timeSlotId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khung giờ với ID: " + timeSlotId));
+        
+        // Kiểm tra xem khung giờ và sân có khớp nhau không
+        if (!timeSlot.getCourt().getId().equals(court.getId())) {
+            throw new IllegalArgumentException("Khung giờ không thuộc sân này");
+        }
+        
+        // Kiểm tra xem khung giờ đã được đặt chưa
+        if (isTimeSlotBooked(courtId, timeSlotId, bookingDate)) {
+            throw new IllegalArgumentException("Khung giờ này đã được đặt cho ngày " + bookingDate);
+        }
+        
+        // Lấy trạng thái "Chờ xác nhận" (ID = 1)
+        BookingStatusType waitingStatus = bookingStatusTypeRepository.findById((byte)1)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Chờ xác nhận'"));
+        
+        // Tạo booking mới
+        Booking booking = new Booking();
+        booking.setUser(user);
+        booking.setCourt(court);
+        booking.setTimeSlot(timeSlot);
+        booking.setBookingDate(bookingDate);
+        booking.setStatus(waitingStatus);
+        booking.setCreatedAt(LocalDateTime.now());
+        
+        // Set booking channel và staff info
+        booking.setBookingChannel(bookingChannel);
+        booking.setCounterStaffId(counterStaffId);
+        
+        // Set booking type dựa trên thời gian đặt
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime bookingDateTime = bookingDate.atTime(timeSlot.getStartTime());
+        if (bookingDateTime.isBefore(now.plusHours(2))) {
+            booking.setBookingType(Booking.BookingType.URGENT);
+        } else {
+            booking.setBookingType(Booking.BookingType.ADVANCE);
+        }
+        
+        // Lưu booking
+        Booking savedBooking = bookingRepository.save(booking);
+        
+        // Tạo invoice tự động cho booking
+        try {
+            invoiceService.createInvoice(savedBooking.getId());
+        } catch (Exception e) {
+            // Log lỗi nhưng không làm gián đoạn tạo booking
+            System.err.println("Failed to create invoice for booking " + savedBooking.getId() + ": " + e.getMessage());
+        }
+        
+        // Tạo thông báo cho admin
+        List<User> admins = userRepository.findByRole("admin");
+        for (User admin : admins) {
+            Notification notification = new Notification();
+            notification.setUser(admin);
+            notification.setMessage("Có đặt sân mới từ " + user.getFullName() + " đang chờ xác nhận (" + 
+                                   bookingChannel.getDescription() + ")");
+            notification.setIsRead(false);
+            notificationRepository.save(notification);
+        }
+        
+        // Tạo thông báo cho người dùng
+        Notification userNotification = new Notification();
+        userNotification.setUser(user);
+        userNotification.setMessage("Đặt sân của bạn đang chờ xác nhận");
+        userNotification.setIsRead(false);
+        notificationRepository.save(userNotification);
+        
+        // Ghi log thay đổi
+        SystemChangeLog log = new SystemChangeLog();
+        log.setTableName("Bookings");
+        log.setRecordId(savedBooking.getId());
+        log.setChangeType("INSERT");
+        log.setChangedFields(String.format(
+                "{\"UserId\":\"%d\",\"CourtId\":\"%d\",\"TimeSlotId\":\"%d\",\"BookingDate\":\"%s\",\"BookingChannel\":\"%s\"}",
+                userId, courtId, timeSlotId, bookingDate, bookingChannel));
+        log.setChangedBy(user);
+        systemChangeLogRepository.save(log);
+        
+        return savedBooking;
     }
 
     @Override

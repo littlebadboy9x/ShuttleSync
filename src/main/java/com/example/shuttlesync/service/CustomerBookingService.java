@@ -111,6 +111,10 @@ public class CustomerBookingService {
             String bookingDateStr = (String) bookingData.get("bookingDate");
             String notes = (String) bookingData.getOrDefault("notes", "");
             
+            // Lấy thông tin voucher và services từ frontend
+            Map<String, Object> voucherData = (Map<String, Object>) bookingData.get("voucher");
+            List<Map<String, Object>> servicesData = (List<Map<String, Object>>) bookingData.getOrDefault("services", new ArrayList<>());
+            
             LocalDate bookingDate = LocalDate.parse(bookingDateStr);
             
             // Validate user exists
@@ -128,6 +132,68 @@ public class CustomerBookingService {
             // Check if time slot is available
             if (isTimeSlotBooked(courtId, timeSlotId, bookingDate)) {
                 throw new RuntimeException("Time slot is already booked");
+            }
+            
+            // Validate voucher nếu có
+            if (voucherData != null) {
+                // Lấy subtotal từ frontend - safe casting
+                Object subtotalObj = bookingData.get("subtotal");
+                Object voucherMinAmountObj = voucherData.get("minOrderAmount");
+                
+                Double subtotal = null;
+                Integer voucherMinAmount = null;
+                
+                // Safe cast subtotal
+                if (subtotalObj instanceof Number) {
+                    subtotal = ((Number) subtotalObj).doubleValue();
+                }
+                
+                // Safe cast minOrderAmount
+                if (voucherMinAmountObj instanceof Number) {
+                    voucherMinAmount = ((Number) voucherMinAmountObj).intValue();
+                }
+                
+                if (subtotal != null && voucherMinAmount != null && subtotal < voucherMinAmount) {
+                    throw new RuntimeException("Giá trị đơn hàng không đủ để áp dụng voucher này. Yêu cầu tối thiểu: " + voucherMinAmount + " VND");
+                }
+            }
+            
+            // Thêm voucher info vào notes nếu có
+            if (voucherData != null) {
+                String voucherCode = (String) voucherData.get("code");
+                String voucherName = (String) voucherData.get("name");
+                if (voucherCode != null) {
+                    notes += (notes.isEmpty() ? "" : " | ") + "Voucher: " + voucherCode + " - " + voucherName;
+                }
+            }
+            
+            // Thêm services info vào notes nếu có
+            if (!servicesData.isEmpty()) {
+                StringBuilder servicesInfo = new StringBuilder();
+                for (Map<String, Object> service : servicesData) {
+                    // Safe casting for serviceId and quantity
+                    Object serviceIdObj = service.get("serviceId");
+                    Object quantityObj = service.get("quantity");
+                    
+                    Integer serviceId = null;
+                    Integer quantity = null;
+                    
+                    if (serviceIdObj instanceof Number) {
+                        serviceId = ((Number) serviceIdObj).intValue();
+                    }
+                    
+                    if (quantityObj instanceof Number) {
+                        quantity = ((Number) quantityObj).intValue();
+                    }
+                    
+                    if (serviceId != null && quantity != null && quantity > 0) {
+                        if (servicesInfo.length() > 0) servicesInfo.append(", ");
+                        servicesInfo.append("Service ").append(serviceId).append(" x").append(quantity);
+                    }
+                }
+                if (servicesInfo.length() > 0) {
+                    notes += (notes.isEmpty() ? "" : " | ") + "Services: " + servicesInfo.toString();
+                }
             }
             
             // Create booking
@@ -155,6 +221,11 @@ public class CustomerBookingService {
             response.put("status", "pending_confirmation");
             response.put("message", "Booking đã được tạo thành công. Vui lòng chờ xác nhận.");
             response.put("estimatedConfirmTime", "15 phút");
+            
+            // Thêm thông tin voucher vào response để log
+            if (voucherData != null) {
+                response.put("appliedVoucher", voucherData.get("code") + " - " + voucherData.get("name"));
+            }
             
             return response;
             

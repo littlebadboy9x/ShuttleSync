@@ -49,8 +49,10 @@ public class AdminBookingController {
                     ", timeSlotId: " + timeSlotId +
                     ", bookingDate: " + bookingDate);
 
-            // Tạo booking
-            Booking booking = bookingService.createBooking(userId, courtId, timeSlotId, bookingDate);
+            // Tạo booking với COUNTER channel
+            Integer counterStaffId = 1; // TODO: Lấy staffId từ JWT token trong tương lai
+            Booking booking = bookingService.createBookingWithChannel(userId, courtId, timeSlotId, bookingDate, 
+                                                                     Booking.BookingChannel.COUNTER, counterStaffId);
 
             // Tự động xác nhận booking
             booking = bookingService.updateBookingStatus(booking.getId(), (byte) 2, null); // Status 2: Đã xác nhận
@@ -63,7 +65,7 @@ public class AdminBookingController {
             response.put("success", true);
             response.put("bookingId", booking.getId());
             response.put("invoiceId", invoice.getId());
-            response.put("message", "Đã tạo đặt sân và hóa đơn thành công");
+            response.put("message", "Đã tạo đặt sân tại quầy và hóa đơn thành công");
 
             return ResponseEntity.ok(response);
         } catch (ResourceNotFoundException e) {

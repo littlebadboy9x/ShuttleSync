@@ -10,6 +10,11 @@ public interface MomoPaymentService {
     MomoPayment createPayment(Invoice invoice);
 
     /**
+     * Tạo yêu cầu thanh toán MoMo cho hóa đơn với extraData
+     */
+    MomoPayment createPayment(Invoice invoice, String extraData);
+
+    /**
      * Xử lý callback từ MoMo sau khi thanh toán
      */
     void handleCallback(String orderId, String requestId, String amount, String orderInfo,
@@ -20,4 +25,9 @@ public interface MomoPaymentService {
      * Kiểm tra trạng thái thanh toán
      */
     MomoPayment checkPaymentStatus(String orderId);
+
+    /**
+     * Mô phỏng thanh toán thành công
+     */
+    void simulateSuccessfulPayment(String orderId);
 }

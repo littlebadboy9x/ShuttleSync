@@ -59,6 +59,9 @@ interface Booking {
   paymentStatus: string
   createdAt: string
   notes?: string
+  bookingChannel?: string
+  bookingType?: string
+  counterStaffId?: number
 }
 
 interface BookingService {
@@ -225,6 +228,7 @@ export default function BookingDetailPage() {
   const [loadingActiveVouchers, setLoadingActiveVouchers] = useState(false);
   const [selectedVoucherId, setSelectedVoucherId] = useState<number | null>(null);
   const [loadingServices, setLoadingServices] = useState(false);
+  const [updatingTotals, setUpdatingTotals] = useState(false);
 
   useEffect(() => {
     // Kiểm tra xác thực và quyền admin
@@ -260,6 +264,7 @@ export default function BookingDetailPage() {
 
   const loadBookingData = async () => {
     setLoading(true);
+    setUpdatingTotals(true);
     
     try {
       // Lấy thông tin chi tiết đặt sân
@@ -315,8 +320,6 @@ export default function BookingDetailPage() {
           variant: "destructive"
         });
       }
-      
-      setLoading(false);
     } catch (error) {
       console.error('Lỗi khi tải dữ liệu:', error);
       toast({
@@ -324,7 +327,9 @@ export default function BookingDetailPage() {
         description: "Không thể tải thông tin đặt sân. Vui lòng thử lại sau.",
         variant: "destructive"
       });
+    } finally {
       setLoading(false);
+      setUpdatingTotals(false);
     }
   };
 
@@ -360,6 +365,26 @@ export default function BookingDetailPage() {
       case "paid": return "Đã thanh toán";
       case "cancelled": return "Đã hủy";
       default: return "Không xác định";
+    }
+  };
+
+  const getBookingChannelText = (channel: string) => {
+    switch (channel) {
+      case "ONLINE": return { text: "Online", icon: "🌐", color: "bg-blue-100 text-blue-800 border-blue-200" };
+      case "COUNTER": return { text: "Tại quầy", icon: "🏢", color: "bg-green-100 text-green-800 border-green-200" };
+      case "PHONE": return { text: "Điện thoại", icon: "📞", color: "bg-purple-100 text-purple-800 border-purple-200" };
+      case "MOBILE_APP": return { text: "Mobile App", icon: "📱", color: "bg-orange-100 text-orange-800 border-orange-200" };
+      default: return { text: "Không xác định", icon: "❓", color: "bg-gray-100 text-gray-800 border-gray-200" };
+    }
+  };
+
+  const getBookingTypeText = (type: string) => {
+    switch (type) {
+      case "ADVANCE": return { text: "Đặt trước", color: "bg-green-100 text-green-800 border-green-200" };
+      case "URGENT": return { text: "Khẩn cấp", color: "bg-red-100 text-red-800 border-red-200" };
+      case "RECURRING": return { text: "Định kỳ", color: "bg-blue-100 text-blue-800 border-blue-200" };
+      case "WALK_IN": return { text: "Đặt tại chỗ", color: "bg-yellow-100 text-yellow-800 border-yellow-200" };
+      default: return { text: "Không xác định", color: "bg-gray-100 text-gray-800 border-gray-200" };
     }
   };
   
@@ -465,8 +490,8 @@ export default function BookingDetailPage() {
       }
       
       toast({
-        title: "Lỗi",
-        description: `Không thể tải danh sách dịch vụ: ${error.response?.status || error.message}`,
+        title: "Loi",
+        description: `Khong the tai danh sach dich vu: ${error.response?.status || error.message}`,
         variant: "destructive"
       });
       setAvailableServices([]);
@@ -479,8 +504,8 @@ export default function BookingDetailPage() {
   const handleSubmitAddService = async () => {
     if (!selectedService || selectedService === 0) {
       toast({
-        title: "Thông báo",
-        description: "Vui lòng chọn dịch vụ",
+        title: "Thong bao",
+        description: "Vui long chon dich vu",
         variant: "destructive"
       });
       return;
@@ -488,8 +513,8 @@ export default function BookingDetailPage() {
     
     if (serviceQuantity < 1) {
       toast({
-        title: "Thông báo",
-        description: "Số lượng phải lớn hơn 0",
+        title: "Thong bao",
+        description: "So luong phai lon hon 0",
         variant: "destructive"
       });
       return;
@@ -510,8 +535,8 @@ export default function BookingDetailPage() {
       
       if (response.data && response.data.success) {
         toast({
-          title: "Thành công",
-          description: "Đã thêm dịch vụ vào đặt sân",
+          title: "Thanh cong",
+          description: "Da them dich vu vao dat san va cap nhat hoa don",
         });
         
         // Đóng dialog và làm mới dữ liệu
@@ -520,14 +545,16 @@ export default function BookingDetailPage() {
         setServiceQuantity(1);
         setServiceNotes("");
         
-        // Tải lại dữ liệu đặt sân và dịch vụ
-        loadBookingData();
+        // Hiển thị trạng thái đang cập nhật
+        setUpdatingTotals(true);
+        // Tải lại dữ liệu đặt sân và dịch vụ để cập nhật tổng tiền
+        await loadBookingData();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Lỗi khi thêm dịch vụ:', error);
       toast({
-        title: "Lỗi",
-        description: "Không thể thêm dịch vụ. Vui lòng thử lại sau.",
+        title: "Loi",
+        description: error.response?.data?.message || "Khong the them dich vu. Vui long thu lai sau.",
         variant: "destructive"
       });
     } finally {
@@ -537,7 +564,7 @@ export default function BookingDetailPage() {
 
   // Thêm hàm xử lý xóa dịch vụ
   const handleRemoveService = async (bookingServiceId: number) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa dịch vụ này?")) {
+    if (!confirm("Ban co chac chan muon xoa dich vu nay?")) {
       return;
     }
     
@@ -549,18 +576,20 @@ export default function BookingDetailPage() {
       
       if (response.data && response.data.success) {
         toast({
-          title: "Thành công",
-          description: "Đã xóa dịch vụ khỏi đặt sân",
+          title: "Thanh cong",
+          description: "Da xoa dich vu va cap nhat hoa don",
         });
         
-        // Tải lại dữ liệu đặt sân và dịch vụ
-        loadBookingData();
+        // Hiển thị trạng thái đang cập nhật
+        setUpdatingTotals(true);
+        // Tải lại dữ liệu đặt sân và dịch vụ để cập nhật tổng tiền
+        await loadBookingData();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Lỗi khi xóa dịch vụ:', error);
       toast({
-        title: "Lỗi",
-        description: "Không thể xóa dịch vụ. Vui lòng thử lại sau.",
+        title: "Loi",
+        description: error.response?.data?.message || "Khong the xoa dich vu. Vui long thu lai sau.",
         variant: "destructive"
       });
     }
@@ -744,8 +773,8 @@ export default function BookingDetailPage() {
   const handleApplyVoucher = async () => {
     if (!selectedVoucherId || !invoice) {
       toast({
-        title: "Thông báo",
-        description: "Vui lòng chọn voucher để áp dụng",
+        title: "Thong bao",
+        description: "Vui long chon voucher de ap dung",
         variant: "destructive"
       });
       return;
@@ -769,8 +798,8 @@ export default function BookingDetailPage() {
         });
         
         toast({
-          title: "Thành công",
-          description: "Đã áp dụng voucher thành công",
+          title: "Thanh cong",
+          description: "Da ap dung voucher va cap nhat tong tien",
         });
         
         // Đóng dialog
@@ -781,24 +810,35 @@ export default function BookingDetailPage() {
         setSearchedVouchers([]);
         setSelectedVoucherId(null);
         
-        // Làm mới dữ liệu
-        loadBookingData();
+        // Hiển thị trạng thái đang cập nhật
+        setUpdatingTotals(true);
+        // Làm mới dữ liệu để đảm bảo tổng tiền được cập nhật
+        await loadBookingData();
       } else {
         toast({
-          title: "Lỗi",
-          description: response.data.message || "Không thể áp dụng voucher",
+          title: "Loi",
+          description: response.data.message || "Khong the ap dung voucher",
           variant: "destructive"
         });
       }
     } catch (error: any) {
       console.error('Lỗi khi áp dụng voucher:', error);
       toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || "Không thể áp dụng voucher. Vui lòng thử lại sau.",
+        title: "Loi",
+        description: error.response?.data?.message || "Khong the ap dung voucher. Vui long thu lai sau.",
         variant: "destructive"
       });
     } finally {
       setApplyingVoucher(false);
+    }
+  };
+
+  // Helper function để format giá trị voucher
+  const formatVoucherValue = (value: number) => {
+    if (value <= 100) {
+      return `${value}%`;
+    } else {
+      return formatCurrency(value);
     }
   };
 
@@ -844,17 +884,29 @@ export default function BookingDetailPage() {
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-center">
                       <CardTitle>Thông tin đặt sân</CardTitle>
-                      <Badge 
-                        className={`${
-                          booking.status === "2" 
-                            ? "bg-green-100 text-green-800 border-green-200" 
-                            : booking.status === "1" 
-                              ? "bg-yellow-100 text-yellow-800 border-yellow-200" 
-                              : "bg-red-100 text-red-800 border-red-200"
-                        }`}
-                      >
-                        {getStatusText(booking.status)}
-                      </Badge>
+                      <div className="flex gap-2">
+                        {booking.bookingChannel && (
+                          <Badge className={getBookingChannelText(booking.bookingChannel).color}>
+                            {getBookingChannelText(booking.bookingChannel).icon} {getBookingChannelText(booking.bookingChannel).text}
+                          </Badge>
+                        )}
+                        {booking.bookingType && (
+                          <Badge className={getBookingTypeText(booking.bookingType).color}>
+                            {getBookingTypeText(booking.bookingType).text}
+                          </Badge>
+                        )}
+                        <Badge 
+                          className={`${
+                            booking.status === "2" 
+                              ? "bg-green-100 text-green-800 border-green-200" 
+                              : booking.status === "1" 
+                                ? "bg-yellow-100 text-yellow-800 border-yellow-200" 
+                                : "bg-red-100 text-red-800 border-red-200"
+                          }`}
+                        >
+                          {getStatusText(booking.status)}
+                        </Badge>
+                      </div>
                     </div>
                     <CardDescription>
                       {booking.createdAt ? (
@@ -882,6 +934,14 @@ export default function BookingDetailPage() {
                               <Mail className="h-4 w-4 text-slate-400" />
                               <span>{booking.userEmail}</span>
                             </div>
+                            {booking.bookingChannel === 'COUNTER' && booking.counterStaffId && (
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-slate-400" />
+                                <span className="text-sm text-slate-600">
+                                  Nhân viên tạo: ID {booking.counterStaffId}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         
@@ -1024,8 +1084,15 @@ export default function BookingDetailPage() {
                           <TableRow>
                             <TableCell colSpan={2}></TableCell>
                             <TableCell className="text-right font-medium">Tổng cộng</TableCell>
-                            <TableCell className="text-right font-medium text-primary">
-                              {formatCurrency(bookingServices.reduce((sum, service) => sum + service.totalPrice, 0))}
+                            <TableCell className="text-right font-medium text-primary flex items-center justify-end">
+                              {updatingTotals ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  Đang cập nhật...
+                                </>
+                              ) : (
+                                formatCurrency(bookingServices.reduce((sum, service) => sum + service.totalPrice, 0))
+                              )}
                             </TableCell>
                             <TableCell></TableCell>
                           </TableRow>
@@ -1128,15 +1195,42 @@ export default function BookingDetailPage() {
                           <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
                               <span className="text-slate-500">Tổng tiền gốc:</span>
-                              <span>{formatCurrency(invoice.originalAmount)}</span>
+                              <span className="flex items-center">
+                                {updatingTotals ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                    Cập nhật...
+                                  </>
+                                ) : (
+                                  formatCurrency(invoice.originalAmount)
+                                )}
+                              </span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-slate-500">Giảm giá:</span>
-                              <span>{formatCurrency(invoice.discountAmount)}</span>
+                              <span className="flex items-center">
+                                {updatingTotals ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                    Cập nhật...
+                                  </>
+                                ) : (
+                                  formatCurrency(invoice.discountAmount)
+                                )}
+                              </span>
                             </div>
                             <div className="flex justify-between font-medium">
                               <span>Thành tiền:</span>
-                              <span className="text-primary">{formatCurrency(invoice.finalAmount)}</span>
+                              <span className="text-primary flex items-center">
+                                {updatingTotals ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                    Cập nhật...
+                                  </>
+                                ) : (
+                                  formatCurrency(invoice.finalAmount)
+                                )}
+                              </span>
                             </div>
                             <div className="pt-2">
                               <Button
@@ -1422,7 +1516,7 @@ export default function BookingDetailPage() {
                           <TableCell className="font-medium">{voucher.code}</TableCell>
                           <TableCell>{voucher.name}</TableCell>
                           <TableCell>
-                            {voucher.type === "PERCENTAGE" ? `${voucher.value}%` : formatCurrency(voucher.value)}
+                            {formatVoucherValue(voucher.value)}
                           </TableCell>
                           <TableCell>{safeFormatDate(voucher.validTo, 'dd/MM/yyyy')}</TableCell>
                         </TableRow>
@@ -1463,7 +1557,7 @@ export default function BookingDetailPage() {
                           <TableCell className="font-medium">{voucher.code}</TableCell>
                           <TableCell>{voucher.name}</TableCell>
                           <TableCell>
-                            {voucher.type === "PERCENTAGE" ? `${voucher.value}%` : formatCurrency(voucher.value)}
+                            {formatVoucherValue(voucher.value)}
                           </TableCell>
                           <TableCell>{safeFormatDate(voucher.validTo, 'dd/MM/yyyy')}</TableCell>
                         </TableRow>
@@ -1499,8 +1593,8 @@ export default function BookingDetailPage() {
                         <span className="text-slate-500">Giá trị:</span>
                         <span>
                           {selectedVoucher.type === "PERCENTAGE" 
-                            ? `${selectedVoucher.value}% (tối đa ${formatCurrency(selectedVoucher.maxDiscountAmount || 0)})` 
-                            : formatCurrency(selectedVoucher.value)}
+                            ? `${formatVoucherValue(selectedVoucher.value)} (tối đa ${formatCurrency(selectedVoucher.maxDiscountAmount || 0)})` 
+                            : formatVoucherValue(selectedVoucher.value)}
                         </span>
                       </div>
                       <div className="flex justify-between">

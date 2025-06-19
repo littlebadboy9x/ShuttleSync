@@ -447,7 +447,7 @@ export default function BookingManagement() {
         try {
             setLoadingCustomers(true)
             const response = await axios.get(
-                `${API_URL}/users/search?query=${encodeURIComponent(query)}`, 
+                `${API_URL}/admin/users/search?query=${encodeURIComponent(query)}`, 
                 getAuthHeader()
             )
             if (response.data && Array.isArray(response.data)) {
@@ -455,6 +455,11 @@ export default function BookingManagement() {
             }
         } catch (error) {
             console.error("Error searching customers:", error)
+            toast({
+                title: "Lỗi tìm kiếm",
+                description: "Không thể tìm kiếm khách hàng. Vui lòng thử lại.",
+                variant: "destructive",
+            })
         } finally {
             setLoadingCustomers(false)
         }
@@ -538,7 +543,7 @@ export default function BookingManagement() {
             // Tạo hoặc lấy user
             let userId: number | undefined
             const userResponse = await axios.post(
-                `${API_URL}/users/create-or-find`,
+                `${API_URL}/admin/users/create-or-find`,
                 { fullName: customerName, email: customerEmail, phone: customerPhone },
                 getAuthHeader()
             )
@@ -560,26 +565,52 @@ export default function BookingManagement() {
             
             // Tạo booking
             const bookingResponse = await axios.post(
-                `${API_URL}/bookings`,
+                `${API_URL}/admin/bookings`,
                 {
                     userId,
                     courtId,
                     timeSlotId,
                     bookingDate,
                     notes,
-                    isWalkIn: true, // Đánh dấu là đặt sân tại quầy
-                    status: "2" // 2: Đã xác nhận (vì admin đặt trực tiếp)
+                    isWalkIn: true // Đánh dấu là đặt sân tại quầy
                 },
                 getAuthHeader()
             )
             
             if (bookingResponse.data) {
+                // Sử dụng type assertion để tránh lỗi TypeScript
+                const bookingData = bookingResponse.data as { id?: number; bookingId?: number }
+                const newBookingId = bookingData.id || bookingData.bookingId
+                
                 toast({
                     title: "Thành công",
-                    description: "Đã tạo đặt sân thành công",
+                    description: "Đã tạo đặt sân thành công. Đang chuyển đến trang chi tiết...",
                 })
+                
+                // Reset form data
+                setBookingFormData({
+                    customerName: '',
+                    customerPhone: '',
+                    customerEmail: '',
+                    courtId: 0,
+                    timeSlotId: 0,
+                    bookingDate: format(new Date().setDate(new Date().getDate() + 1), 'yyyy-MM-dd'),
+                    notes: ''
+                })
+                setCustomers([])
+                setSearchCustomer('')
+                setTimeSlots([])
+                setAvailableTimeSlots([])
                 setIsBookingDialogOpen(false)
-                loadBookingData() // Tải lại danh sách đặt sân
+                
+                // Chuyển đến trang chi tiết đặt sân sau 1 giây
+                setTimeout(() => {
+                    if (newBookingId) {
+                        window.location.href = `/admin/bookings/${newBookingId}/detail`
+                    } else {
+                        loadBookingData() // Tải lại danh sách nếu không có ID
+                    }
+                }, 1000)
             }
         } catch (error: any) {
             console.error("Error creating booking:", error)
@@ -591,44 +622,7 @@ export default function BookingManagement() {
         }
     }
 
-    const statsCards = [
-        {
-            title: "Tổng Đặt Sân",
-            value: stats.totalBookings,
-            icon: CalendarDays,
-            color: "bg-blue-500",
-            bgColor: "bg-blue-50",
-            textColor: "text-blue-600",
-            trend: "+12%"
-        },
-        {
-            title: "Chờ Xác Nhận",
-            value: stats.pendingBookings,
-            icon: Clock,
-            color: "bg-yellow-500",
-            bgColor: "bg-yellow-50",
-            textColor: "text-yellow-600",
-            trend: "+3"
-        },
-        {
-            title: "Đã Xác Nhận",
-            value: stats.confirmedBookings,
-            icon: CheckCircle,
-            color: "bg-green-500",
-            bgColor: "bg-green-50",
-            textColor: "text-green-600",
-            trend: "+8%"
-        },
-        {
-            title: "Đã Hủy",
-            value: stats.cancelledBookings,
-            icon: XCircle,
-            color: "bg-red-500",
-            bgColor: "bg-red-50",
-            textColor: "text-red-600",
-            trend: "-2%"
-        }
-    ];
+    // Statistics moved to Analytics page
 
     return (
         <AdminLayout>
@@ -670,36 +664,7 @@ export default function BookingManagement() {
                         </div>
                     </div>
 
-                    {/* Stats Cards */}
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-                        {statsCards.map((stat, index) => {
-                            const IconComponent = stat.icon;
-                            return (
-                                <Card key={index} className="group hover:shadow-2xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-                                    <CardContent className="p-6">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex-1">
-                                                <p className="text-sm font-medium text-slate-600 mb-1">
-                                                    {stat.title}
-                                                </p>
-                                                <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                                                    {stat.value}
-                                                </h3>
-                                                <div className="flex items-center text-sm">
-                                                    <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
-                                                    <span className="text-green-600 font-medium">{stat.trend}</span>
-                                                    <span className="text-slate-500 ml-1">từ tuần trước</span>
-                                                </div>
-                                            </div>
-                                            <div className={`p-3 rounded-2xl ${stat.bgColor} group-hover:scale-110 transition-transform duration-200`}>
-                                                <IconComponent className={`h-6 w-6 ${stat.textColor}`} />
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            );
-                        })}
-                    </div>
+                    {/* Stats Cards moved to Analytics page */}
 
                     {/* Main Content */}
                     <Card className="shadow-2xl border-0 bg-white/90 backdrop-blur-sm">

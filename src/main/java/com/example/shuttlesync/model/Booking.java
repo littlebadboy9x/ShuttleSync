@@ -42,6 +42,17 @@ public class Booking {
     @JoinColumn(name = "Status", nullable = false)
     @ToString.Exclude
     private BookingStatusType status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "BookingChannel", length = 20, nullable = false)
+    private BookingChannel bookingChannel = BookingChannel.ONLINE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "BookingType", length = 20)
+    private BookingType bookingType = BookingType.ADVANCE;
+
+    @Column(name = "CounterStaffId")
+    private Integer counterStaffId; // ID nhân viên tạo booking tại quầy
     
     @Column(name = "Notes", length = 255)
     private String notes;
@@ -73,5 +84,41 @@ public class Booking {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+    }
+
+    // Enum cho kênh đặt
+    public enum BookingChannel {
+        ONLINE("Đặt online"),
+        COUNTER("Đặt tại quầy"),
+        PHONE("Đặt qua điện thoại"),
+        MOBILE_APP("Đặt qua app mobile");
+
+        private final String description;
+
+        BookingChannel(String description) {
+            this.description = description;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+    }
+
+    // Enum cho loại đặt
+    public enum BookingType {
+        ADVANCE("Đặt trước"),
+        URGENT("Đặt gấp"),
+        RECURRING("Đặt định kỳ"),
+        WALK_IN("Khách vãng lai");
+
+        private final String description;
+
+        BookingType(String description) {
+            this.description = description;
+        }
+
+        public String getDescription() {
+            return description;
+        }
     }
 }

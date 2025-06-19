@@ -602,11 +602,7 @@ export default function ServicesPage() {
     }
   }
 
-  // Statistics
-  const totalServices = services.length;
-  const activeServices = services.filter(s => s.isActive).length;
-  const inactiveServices = services.filter(s => !s.isActive).length;
-  const avgPrice = services.length > 0 ? services.reduce((sum, s) => sum + s.unitPrice, 0) / services.length : 0;
+  // Statistics moved to Analytics page
 
   return (
     <AdminLayout>
@@ -650,70 +646,7 @@ export default function ServicesPage() {
             </div>
           </div>
 
-          {/* Statistics Cards */}
-          <div className="grid gap-6 md:grid-cols-4 mb-8">
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Tổng Dịch Vụ
-                </CardTitle>
-                <PackageOpen className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-slate-900">{totalServices}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Tất cả dịch vụ trong hệ thống
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Đang Hoạt Động
-                </CardTitle>
-                <div className="w-4 h-4 bg-green-500 rounded-full" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{activeServices}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Dịch vụ có thể sử dụng
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Tạm Dừng
-                </CardTitle>
-                <div className="w-4 h-4 bg-red-500 rounded-full" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">{inactiveServices}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Dịch vụ không có sẵn
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Giá Trung Bình
-                </CardTitle>
-                <DollarSign className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-purple-600">
-                  {avgPrice.toLocaleString('vi-VN')} VNĐ
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Giá trung bình của dịch vụ
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Statistics Cards moved to Analytics page */}
 
           {/* Search and Filter */}
           <Card className="mb-8 border-0 shadow-lg bg-white/90 backdrop-blur-sm">

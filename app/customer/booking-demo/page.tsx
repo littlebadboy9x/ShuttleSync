@@ -96,12 +96,23 @@ const BookingDemoPage = () => {
     const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
     const [voucherCode, setVoucherCode] = useState('');
     const [showVoucherModal, setShowVoucherModal] = useState(false);
-    
-    // Real data from API instead of mock
-    const [services, setServices] = useState<Service[]>([]);
-    const [vouchers, setVouchers] = useState<any[]>([]);
-    const [isLoadingServices, setIsLoadingServices] = useState(true);
-    const [isLoadingVouchers, setIsLoadingVouchers] = useState(false);
+
+    // Services based on database - will be fetched from API later
+    const mockServices: Service[] = [
+        { id: 1, name: "Coca-Cola", description: "Lon Coca-Cola 330ml", price: 15000, category: "Đồ Uống" },
+        { id: 2, name: "Nước suối", description: "Chai nước suối 500ml", price: 10000, category: "Đồ Uống" },
+        { id: 3, name: "Thuê Vợt", description: "Thuê vợt cầu lông mỗi giờ", price: 30000, category: "Thuê Dụng Cụ" },
+        { id: 4, name: "Thuê Khăn", description: "Thuê khăn thể thao", price: 10000, category: "Thuê Dụng Cụ" },
+        { id: 5, name: "Nước tăng lực", description: "Lon nước tăng lực", price: 25000, category: "Đồ Uống" },
+        { id: 6, name: "Giày cầu lông", description: "Thuê giày cầu lông", price: 50000, category: "Thuê Dụng Cụ" }
+    ];
+
+    // Discounts based on database - will be fetched from API later
+    const mockVouchers = [
+        { id: 1, code: "WELCOME10", name: "Chào mừng khách hàng mới", description: "Giảm 10% cho đơn hàng đầu tiên", type: "PERCENTAGE", value: 10, minOrderAmount: 200000, maxDiscountAmount: 50000 },
+        { id: 2, code: "WEEKEND20", name: "Khuyến mãi cuối tuần", description: "Giảm 20% cho tất cả đặt sân vào cuối tuần", type: "PERCENTAGE", value: 20, minOrderAmount: 300000, maxDiscountAmount: 100000 },
+        { id: 3, code: "HOLIDAY50K", name: "Giảm giá ngày lễ", description: "Giảm cố định 50,000 VNĐ cho các ngày lễ", type: "FIXED", value: 50000, minOrderAmount: 150000, maxDiscountAmount: null }
+    ];
 
     // Generate week dates
     const getWeekDates = (date: Date) => {
@@ -142,7 +153,6 @@ const BookingDemoPage = () => {
     // Fetch courts from API
     useEffect(() => {
         fetchCourts();
-        fetchServices(); // Fetch services when component mounts
     }, []);
 
     // Load booking data when court or week changes
@@ -151,13 +161,6 @@ const BookingDemoPage = () => {
             fetchWeeklyBookingData();
         }
     }, [selectedCourt, currentWeek]);
-
-    // Load vouchers when modal opens
-    useEffect(() => {
-        if (showVoucherModal) {
-            fetchVouchers();
-        }
-    }, [showVoucherModal]);
 
     const fetchCourts = async () => {
         try {
@@ -346,7 +349,7 @@ const BookingDemoPage = () => {
         
         const courtPrice = selectedSlot.price;
         const servicesPrice = Object.entries(selectedServices).reduce((total, [serviceId, quantity]) => {
-            const service = services.find(s => s.id === parseInt(serviceId));
+            const service = mockServices.find(s => s.id === parseInt(serviceId));
             return total + (service ? service.price * quantity : 0);
         }, 0);
         
@@ -358,7 +361,7 @@ const BookingDemoPage = () => {
         
         const courtPrice = selectedSlot.price;
         const servicesPrice = Object.entries(selectedServices).reduce((total, [serviceId, quantity]) => {
-            const service = services.find(s => s.id === parseInt(serviceId));
+            const service = mockServices.find(s => s.id === parseInt(serviceId));
             return total + (service ? service.price * quantity : 0);
         }, 0);
         
@@ -370,49 +373,23 @@ const BookingDemoPage = () => {
         
         const subtotal = calculateSubtotal();
         
-        console.log('=== DISCOUNT DEBUG ===');
-        console.log('Applied voucher:', appliedVoucher);
-        console.log('Voucher type:', appliedVoucher.type);
-        console.log('Voucher value:', appliedVoucher.value);
-        console.log('Subtotal:', subtotal);
-        console.log('Max discount amount:', appliedVoucher.maxDiscountAmount);
-        
-        if (appliedVoucher.type === 'PERCENTAGE' || appliedVoucher.type === 'percentage') {
+        if (appliedVoucher.type === 'PERCENTAGE') {
             const discount = (subtotal * appliedVoucher.value) / 100;
-            console.log('Calculated percentage discount:', discount);
-            const finalDiscount = appliedVoucher.maxDiscountAmount ? Math.min(discount, appliedVoucher.maxDiscountAmount) : discount;
-            console.log('Final discount after max limit:', finalDiscount);
-            return finalDiscount;
+            return appliedVoucher.maxDiscountAmount ? Math.min(discount, appliedVoucher.maxDiscountAmount) : discount;
         } else {
-            console.log('Using fixed discount:', appliedVoucher.value);
             return appliedVoucher.value;
         }
     };
 
-    const handleVoucherApply = (voucherCodeToApply?: string) => {
-        const codeToCheck = voucherCodeToApply || voucherCode;
-        const voucher = vouchers.find(v => v.code === codeToCheck.toUpperCase());
-        const subtotal = calculateSubtotal();
-        
-        console.log('=== VOUCHER DEBUG ===');
-        console.log('Code to check:', codeToCheck);
-        console.log('Found voucher:', voucher);
-        console.log('Subtotal:', subtotal);
-        console.log('Min order amount:', voucher?.minOrderAmount);
-        
-        if (!voucher) {
-            alert('Mã voucher không hợp lệ!');
-            return;
+    const handleVoucherApply = () => {
+        const voucher = mockVouchers.find(v => v.code === voucherCode.toUpperCase());
+        if (voucher && calculateSubtotal() >= voucher.minOrderAmount) {
+            setAppliedVoucher(voucher);
+            setVoucherCode('');
+            setShowVoucherModal(false);
+        } else {
+            alert('Mã voucher không hợp lệ hoặc đơn hàng chưa đạt giá trị tối thiểu!');
         }
-        
-        if (subtotal < voucher.minOrderAmount) {
-            alert(`Đơn hàng chưa đạt giá trị tối thiểu ${formatCurrency(voucher.minOrderAmount)} để sử dụng voucher này!`);
-            return;
-        }
-        
-        setAppliedVoucher(voucher);
-        setVoucherCode('');
-        setShowVoucherModal(false);
     };
 
     const handleServiceChange = (serviceId: number, change: number) => {
@@ -499,75 +476,6 @@ const BookingDemoPage = () => {
             alert('❌ Đặt sân thất bại! Vui lòng thử lại hoặc liên hệ hỗ trợ.');
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    // Fetch services from database
-    const fetchServices = async () => {
-        try {
-            setIsLoadingServices(true);
-            const response = await fetch(`${API_BASE_URL}/service/services/active`, {
-                method: 'GET',
-                headers: getAuthHeaders()
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Fetched services:', data);
-                // Map API response to match our Service interface
-                const mappedServices = data.map((service: any) => ({
-                    id: service.id,
-                    name: service.serviceName,
-                    description: service.description || '',
-                    price: service.unitPrice,
-                    category: service.serviceTypeName || 'Dịch vụ'
-                }));
-                setServices(mappedServices);
-            } else {
-                console.error('Failed to fetch services');
-                setServices([]);
-            }
-        } catch (error) {
-            console.error('Error fetching services:', error);
-            setServices([]);
-        } finally {
-            setIsLoadingServices(false);
-        }
-    };
-
-    // Fetch vouchers from database  
-    const fetchVouchers = async () => {
-        try {
-            setIsLoadingVouchers(true);
-            const response = await fetch(`${API_BASE_URL}/admin/vouchers/active`, {
-                method: 'GET',
-                headers: getAuthHeaders()
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Fetched vouchers:', data);
-                // Map API response to match our voucher structure
-                const mappedVouchers = data.map((voucher: any) => ({
-                    id: voucher.id,
-                    code: voucher.code,
-                    name: voucher.name,
-                    description: voucher.description || '',
-                    type: voucher.type,
-                    value: voucher.value,
-                    minOrderAmount: voucher.minOrder || 0,  // Backend trả về minOrder, không phải minOrderAmount
-                    maxDiscountAmount: voucher.maxDiscount || 0  // Backend trả về maxDiscount
-                }));
-                setVouchers(mappedVouchers);
-            } else {
-                console.error('Failed to fetch vouchers');
-                setVouchers([]);
-            }
-        } catch (error) {
-            console.error('Error fetching vouchers:', error);
-            setVouchers([]);
-        } finally {
-            setIsLoadingVouchers(false);
         }
     };
 
@@ -918,55 +826,33 @@ const BookingDemoPage = () => {
                                     Dịch vụ thêm (tùy chọn)
                                 </h3>
                                 
-                                {isLoadingServices ? (
-                                    <div className="space-y-3">
-                                        {[1, 2, 3].map((i) => (
-                                            <div key={i} className="animate-pulse flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                                                <div className="flex-1">
-                                                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-                                                    <div className="h-3 bg-gray-200 rounded w-3/4 mb-1"></div>
-                                                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
-                                                </div>
-                                                <div className="w-20 h-8 bg-gray-200 rounded"></div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : services.length === 0 ? (
-                                    <div className="text-center py-8">
-                                        <div className="text-gray-400 mb-2">
-                                            <ShoppingCart className="h-12 w-12 mx-auto mb-3" />
+                                {mockServices.map(service => (
+                                    <div key={service.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
+                                        <div className="flex-1">
+                                            <h5 className="font-medium text-gray-900">{service.name}</h5>
+                                            <p className="text-sm text-gray-600">{service.description}</p>
+                                            <p className="text-sm font-semibold text-blue-600">{formatCurrency(service.price)}</p>
                                         </div>
-                                        <p className="text-gray-500">Không có dịch vụ nào khả dụng</p>
-                                    </div>
-                                ) : (
-                                    services.map(service => (
-                                        <div key={service.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
-                                            <div className="flex-1">
-                                                <h5 className="font-medium text-gray-900">{service.name}</h5>
-                                                <p className="text-sm text-gray-600">{service.description}</p>
-                                                <p className="text-sm font-semibold text-blue-600">{formatCurrency(service.price)}</p>
-                                            </div>
-                                            <div className="flex items-center space-x-2 ml-4">
-                                                <button
-                                                    onClick={() => handleServiceChange(service.id, -1)}
-                                                    className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-                                                    disabled={!selectedServices[service.id]}
-                                                >
-                                                    <Minus className="h-4 w-4 text-gray-600" />
-                                                </button>
-                                                <span className="w-8 text-center font-medium">
-                                                    {selectedServices[service.id] || 0}
-                                                </span>
-                                                <button
-                                                    onClick={() => handleServiceChange(service.id, 1)}
-                                                    className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-                                                >
-                                                    <Plus className="h-4 w-4 text-gray-600" />
-                                                </button>
-                                            </div>
+                                        <div className="flex items-center space-x-2 ml-4">
+                                            <button
+                                                onClick={() => handleServiceChange(service.id, -1)}
+                                                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                                                disabled={!selectedServices[service.id]}
+                                            >
+                                                <Minus className="h-4 w-4 text-gray-600" />
+                                            </button>
+                                            <span className="w-8 text-center font-medium">
+                                                {selectedServices[service.id] || 0}
+                                            </span>
+                                            <button
+                                                onClick={() => handleServiceChange(service.id, 1)}
+                                                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                                            >
+                                                <Plus className="h-4 w-4 text-gray-600" />
+                                            </button>
                                         </div>
-                                    ))
-                                )}
+                                    </div>
+                                ))}
                             </div>
 
                             {/* Notes */}
@@ -1023,7 +909,7 @@ const BookingDemoPage = () => {
                                     </div>
                                     
                                     {Object.entries(selectedServices).map(([serviceId, quantity]) => {
-                                        const service = services.find(s => s.id === parseInt(serviceId));
+                                        const service = mockServices.find(s => s.id === parseInt(serviceId));
                                         if (!service || quantity === 0) return null;
                                         return (
                                             <div key={serviceId} className="flex justify-between text-gray-600">
@@ -1112,46 +998,27 @@ const BookingDemoPage = () => {
                             <div>
                                 <h4 className="font-medium mb-2">Voucher khả dụng</h4>
                                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                                    {isLoadingVouchers ? (
-                                        <div className="space-y-2">
-                                            {[1, 2, 3].map((i) => (
-                                                <div key={i} className="animate-pulse p-3 border border-gray-200 rounded-lg">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-                                                        <div className="h-3 bg-gray-200 rounded w-1/4"></div>
-                                                    </div>
-                                                    <div className="h-3 bg-gray-200 rounded w-3/4 mb-1"></div>
-                                                    <div className="h-2 bg-gray-200 rounded w-1/2"></div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : vouchers.length === 0 ? (
-                                        <div className="text-center py-8">
-                                            <div className="text-gray-400 mb-2">
-                                                <Tag className="h-12 w-12 mx-auto mb-3" />
+                                    {mockVouchers.map((voucher) => (
+                                        <div 
+                                            key={voucher.id}
+                                            onClick={() => {
+                                                setVoucherCode(voucher.code);
+                                                handleVoucherApply();
+                                            }}
+                                            className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-medium text-blue-600">{voucher.code}</span>
+                                                <span className="text-sm text-gray-500">
+                                                    {formatVoucherValue(voucher.value)}
+                                                </span>
                                             </div>
-                                            <p className="text-gray-500">Không có voucher nào khả dụng</p>
+                                            <p className="text-sm text-gray-600 mt-1">{voucher.description}</p>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Đơn tối thiểu: {formatCurrency(voucher.minOrderAmount)}
+                                            </p>
                                         </div>
-                                    ) : (
-                                        vouchers.map((voucher) => (
-                                            <div 
-                                                key={voucher.id}
-                                                onClick={() => handleVoucherApply(voucher.code)}
-                                                className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-medium text-blue-600">{voucher.code}</span>
-                                                    <span className="text-sm text-gray-500">
-                                                        {formatVoucherValue(voucher.value)}
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-gray-600 mt-1">{voucher.description}</p>
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    Đơn tối thiểu: {formatCurrency(voucher.minOrderAmount)}
-                                                </p>
-                                            </div>
-                                        ))
-                                    )}
+                                    ))}
                                 </div>
                             </div>
                         </div>

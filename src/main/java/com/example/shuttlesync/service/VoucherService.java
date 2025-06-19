@@ -6,6 +6,7 @@ import com.example.shuttlesync.model.User;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface VoucherService {
@@ -48,4 +49,12 @@ public interface VoucherService {
     // Maintenance
     void updateExpiredVouchers();
     boolean isVoucherCodeUnique(String code);
+    
+    // Auto voucher system
+    int autoGiftVouchersForUser(Integer userId);
+    int autoGiftVouchersForAllUsers();
+    int getUserBookingCount(Integer userId);
+    Map<String, Object> getVoucherEligibility(Integer userId);
+    Map<String, Object> getPersonalVouchers(Integer userId);
+    boolean giftVoucherManually(Integer userId, Integer voucherId, String notes);
 } 

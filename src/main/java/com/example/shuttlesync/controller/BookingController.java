@@ -224,8 +224,11 @@ public class BookingController {
                 return ResponseEntity.badRequest().build();
             }
             
-            // Tạo booking mới
-            Booking booking = bookingService.createBooking(userId, courtId, timeSlotId, bookingDate);
+            // Tạo booking mới với bookingChannel phù hợp
+            Booking.BookingChannel channel = isWalkIn ? Booking.BookingChannel.COUNTER : Booking.BookingChannel.ONLINE;
+            Integer counterStaffId = isWalkIn ? 1 : null; // TODO: Lấy staffId từ JWT token trong tương lai
+            
+            Booking booking = bookingService.createBookingWithChannel(userId, courtId, timeSlotId, bookingDate, channel, counterStaffId);
             
             // Nếu là đặt tại quầy, cập nhật trạng thái thành "Đã xác nhận" (ID = 2)
             if (isWalkIn) {

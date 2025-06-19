@@ -29,6 +29,11 @@ public class VoucherDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
+    // New voucher system fields
+    private String voucherType; // "PUBLIC" or "PERSONAL"
+    private Integer requiredBookingCount;
+    private Integer createdBy;
+    
     // Additional computed fields for UI
     private Double usagePercentage;
     private Boolean isExpired;

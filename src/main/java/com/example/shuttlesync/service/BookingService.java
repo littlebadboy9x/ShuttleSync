@@ -23,6 +23,9 @@ public interface BookingService {
     
     Booking createBooking(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate, Set<Integer> discountIds);
     
+    Booking createBookingWithChannel(Integer userId, Integer courtId, Integer timeSlotId, LocalDate bookingDate, 
+                                   Booking.BookingChannel bookingChannel, Integer counterStaffId);
+    
     Booking updateBookingStatus(Integer bookingId, Byte newStatusId, User changedBy);
     
     void cancelBooking(Integer bookingId, User user);

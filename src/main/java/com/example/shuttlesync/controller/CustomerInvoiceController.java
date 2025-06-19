@@ -235,6 +235,29 @@ public class CustomerInvoiceController {
                 dto.put("bookingId", invoice.getBooking().getId());
                 dto.put("bookingDate", invoice.getBooking().getBookingDate());
                 
+                // Thêm thông tin booking channel
+                if (invoice.getBooking().getBookingChannel() != null) {
+                    dto.put("bookingChannel", invoice.getBooking().getBookingChannel().name());
+                    dto.put("bookingChannelDisplay", invoice.getBooking().getBookingChannel().getDescription());
+                } else {
+                    dto.put("bookingChannel", null);
+                    dto.put("bookingChannelDisplay", null);
+                }
+                
+                if (invoice.getBooking().getBookingType() != null) {
+                    dto.put("bookingType", invoice.getBooking().getBookingType().name());
+                    dto.put("bookingTypeDisplay", invoice.getBooking().getBookingType().getDescription());
+                } else {
+                    dto.put("bookingType", null);
+                    dto.put("bookingTypeDisplay", null);
+                }
+                
+                if (invoice.getBooking().getCounterStaffId() != null) {
+                    dto.put("counterStaffId", invoice.getBooking().getCounterStaffId());
+                } else {
+                    dto.put("counterStaffId", null);
+                }
+                
                 // Safely get court data
                 if (invoice.getBooking().getCourt() != null) {
                     dto.put("courtName", invoice.getBooking().getCourt().getName());
@@ -253,9 +276,23 @@ public class CustomerInvoiceController {
             } else {
                 dto.put("bookingId", null);
                 dto.put("bookingDate", null);
+                dto.put("bookingChannel", null);
+                dto.put("bookingChannelDisplay", null);
+                dto.put("bookingType", null);
+                dto.put("bookingTypeDisplay", null);
+                dto.put("counterStaffId", null);
                 dto.put("courtName", "N/A");
                 dto.put("startTime", "N/A");
                 dto.put("endTime", "N/A");
+            }
+            
+            // Thêm thông tin invoice type
+            if (invoice.getInvoiceType() != null) {
+                dto.put("invoiceType", invoice.getInvoiceType().name());
+                dto.put("invoiceTypeDisplay", invoice.getInvoiceType().getDisplayName());
+            } else {
+                dto.put("invoiceType", null);
+                dto.put("invoiceTypeDisplay", null);
             }
             
             dto.put("invoiceDate", invoice.getInvoiceDate());
@@ -279,10 +316,24 @@ public class CustomerInvoiceController {
         Map<String, Object> dto = convertToSimpleDTO(invoice);
         dto.put("notes", invoice.getNotes());
         
-        // Thêm thông tin booking chi tiết
-        dto.put("bookingNotes", invoice.getBooking().getNotes());
+        // Thêm thông tin khách hàng chi tiết
+        if (invoice.getBooking() != null && invoice.getBooking().getUser() != null) {
+            User customer = invoice.getBooking().getUser();
+            dto.put("customerName", customer.getFullName() != null ? customer.getFullName() : "N/A");
+            dto.put("customerEmail", customer.getEmail() != null ? customer.getEmail() : "N/A");
+            dto.put("customerPhone", customer.getPhone() != null ? customer.getPhone() : "N/A");
+        } else {
+            dto.put("customerName", "N/A");
+            dto.put("customerEmail", "N/A");
+            dto.put("customerPhone", "N/A");
+        }
         
-        // Thêm thông tin chi tiết hóa đơn nếu có
+        // Thêm thông tin booking chi tiết
+        if (invoice.getBooking() != null) {
+            dto.put("bookingNotes", invoice.getBooking().getNotes());
+        }
+        
+        // Thêm thông tin chi tiết hóa đơn từ InvoiceDetail entities
         if (invoice.getInvoiceDetails() != null && !invoice.getInvoiceDetails().isEmpty()) {
             List<Map<String, Object>> details = invoice.getInvoiceDetails().stream()
                     .map(detail -> {
@@ -291,11 +342,31 @@ public class CustomerInvoiceController {
                         detailMap.put("itemName", detail.getItemName());
                         detailMap.put("quantity", detail.getQuantity());
                         detailMap.put("unitPrice", detail.getUnitPrice());
-                        detailMap.put("totalPrice", detail.getUnitPrice().multiply(java.math.BigDecimal.valueOf(detail.getQuantity())));
+                        detailMap.put("amount", detail.getAmount());
+                        
+                        // Thêm thông tin time slot nếu có (court booking)
+                        if (detail.getTimeSlot() != null) {
+                            detailMap.put("bookingDate", detail.getBookingDate());
+                            detailMap.put("startTime", detail.getStartTime());
+                            detailMap.put("endTime", detail.getEndTime());
+                            detailMap.put("courtName", detail.getCourtName());
+                            detailMap.put("type", "court"); // Đánh dấu là đặt sân
+                        }
+                        
+                        // Thêm thông tin service nếu có
+                        if (detail.getService() != null) {
+                            detailMap.put("serviceId", detail.getService().getId());
+                            detailMap.put("serviceName", detail.getService().getServiceName());
+                            detailMap.put("serviceDescription", detail.getService().getDescription());
+                            detailMap.put("type", "service"); // Đánh dấu là dịch vụ
+                        }
+                        
                         return detailMap;
                     })
                     .collect(Collectors.toList());
             dto.put("details", details);
+        } else {
+            dto.put("details", List.of());
         }
         
         return dto;

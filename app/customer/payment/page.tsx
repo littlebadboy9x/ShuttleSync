@@ -20,11 +20,548 @@ import {
     FileText,
     Download,
     Eye,
-    X
+    X,
+    MapPin,
+    Package,
+    User,
+    Mail,
+    Phone
 } from 'lucide-react';
 
+// Component hiển thị chi tiết hóa đơn
+const InvoiceDetailModal = ({ invoice, onClose, onPayNow }: { 
+    invoice: any, 
+    onClose: () => void, 
+    onPayNow: (invoice: any) => void 
+}) => {
+    const [detailedInvoice, setDetailedInvoice] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const loadInvoiceDetail = async () => {
+            try {
+                setIsLoading(true);
+                
+                // Debug: Check auth token
+                const user = localStorage.getItem('user');
+                console.log('Debug: User in localStorage:', user ? 'exists' : 'not found');
+                
+                console.log('Debug: Loading invoice detail for ID:', invoice.id);
+                const response = await customerInvoiceApi.getInvoiceDetails(invoice.id);
+                console.log('Debug: API response:', response);
+                
+                if (response.success) {
+                    setDetailedInvoice(response.invoice);
+                } else {
+                    throw new Error(response.message || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('Error loading invoice detail:', err);
+                setError(err instanceof Error ? err.message : 'Unknown error');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadInvoiceDetail();
+    }, [invoice.id]);
+
+    const formatDateSafe = (dateString: string | null): string => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'N/A';
+            return date.toLocaleDateString('vi-VN');
+        } catch (error) {
+            return 'N/A';
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                    <div className="text-center py-8">
+                        <RefreshCw className="w-8 h-8 mx-auto text-blue-600 animate-spin mb-2" />
+                        <p className="text-gray-600">Đang tải chi tiết hóa đơn...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                    <div className="text-center py-8">
+                        <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
+                        <p className="text-red-600 mb-4">Lỗi tải chi tiết hóa đơn</p>
+                        <p className="text-gray-600 mb-4">{error}</p>
+                        <button 
+                            onClick={onClose}
+                            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                        >
+                            Đóng
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!detailedInvoice) return null;
+
+    // Phân loại invoice details
+    const courtBookings = detailedInvoice.details?.filter((detail: any) => detail.type === 'court') || [];
+    const services = detailedInvoice.details?.filter((detail: any) => detail.type === 'service') || [];
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-2xl font-bold text-gray-800">
+                        Chi tiết hóa đơn #{detailedInvoice.id}
+                    </h3>
+                    <button 
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100"
+                    >
+                        <X size={24} />
+                    </button>
+                </div>
+
+                <div className="space-y-6">
+                    {/* Thông tin khách hàng */}
+                    <div className="bg-gray-50 rounded-xl p-4">
+                        <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                            <User className="mr-2 text-blue-600" size={18} />
+                            Thông tin khách hàng
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div className="flex items-center">
+                                <User className="mr-2 text-gray-400" size={16} />
+                                <span>{detailedInvoice.customerName}</span>
+                            </div>
+                            <div className="flex items-center">
+                                <Mail className="mr-2 text-gray-400" size={16} />
+                                <span>{detailedInvoice.customerEmail}</span>
+                            </div>
+                            <div className="flex items-center">
+                                <Phone className="mr-2 text-gray-400" size={16} />
+                                <span>{detailedInvoice.customerPhone}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Thông tin hóa đơn */}
+                    <div className="bg-blue-50 rounded-xl p-4">
+                        <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                            <FileText className="mr-2 text-blue-600" size={18} />
+                            Thông tin hóa đơn
+                        </h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div className="flex flex-col">
+                                <span className="text-gray-600">Mã hóa đơn:</span>
+                                <span className="font-medium">#{detailedInvoice.id}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-gray-600">Booking ID:</span>
+                                <span className="font-medium">#{detailedInvoice.bookingId}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-gray-600">Ngày tạo:</span>
+                                <span className="font-medium">{formatDateSafe(detailedInvoice.invoiceDate)}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-gray-600">Trạng thái:</span>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium inline-block w-fit ${
+                                    detailedInvoice.status === 'Paid' 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                    {detailedInvoice.status === 'Paid' ? 'Đã thanh toán' : 'Chờ thanh toán'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Court Bookings */}
+                    {courtBookings.length > 0 && (
+                        <div className="bg-blue-50 rounded-xl p-4 mb-4">
+                            <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                                <MapPin className="mr-2 text-blue-600" size={18} />
+                                Đặt sân ({courtBookings.length})
+                            </h4>
+                            <div className="space-y-3">
+                                {courtBookings.map((booking: any, index: number) => (
+                                    <div key={index} className="bg-white rounded-lg p-3 border border-blue-200">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <p className="font-medium text-gray-800 mb-1">
+                                                    {booking.description || booking.itemName || 'Thuê sân'}
+                                                </p>
+                                                <p className="text-sm text-gray-600 mb-2">
+                                                    {booking.timeSlotInfo ? 
+                                                        `${formatDateSafe(booking.timeSlotInfo.date)} | ${booking.timeSlotInfo.startTime} - ${booking.timeSlotInfo.endTime}` :
+                                                        booking.courtName && booking.bookingDate ? 
+                                                            `${booking.courtName} • ${formatDateSafe(booking.bookingDate)}` :
+                                                            booking.description || 'Thông tin thời gian không có sẵn'
+                                                    }
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-semibold text-blue-600">
+                                                    {formatCurrency(booking.unitPrice || booking.amount || booking.totalPrice || 0)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Services */}
+                    {services.length > 0 && (
+                        <div className="bg-green-50 rounded-xl p-4 mb-4">
+                            <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                                <Package className="mr-2 text-green-600" size={18} />
+                                Dịch vụ ({services.length})
+                            </h4>
+                            <div className="space-y-3">
+                                {services.map((service: any, index: number) => (
+                                    <div key={index} className="bg-white rounded-lg p-3 border border-green-200">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <p className="font-medium text-gray-800 mb-1">
+                                                    {service.description || service.itemName || 'Dịch vụ'}
+                                                </p>
+                                                <p className="text-sm text-gray-600">
+                                                    Số lượng: {service.quantity || 1} | 
+                                                    Đơn giá: {formatCurrency(service.unitPrice || service.amount || 0)}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-semibold text-green-600">
+                                                    {formatCurrency(service.totalPrice || service.amount || (service.quantity * service.unitPrice) || 0)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Tổng thanh toán */}
+                    <div className="bg-gray-50 rounded-xl p-4">
+                        <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                            <DollarSign className="mr-2 text-purple-600" size={18} />
+                            Tổng thanh toán
+                        </h4>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Tổng tiền gốc:</span>
+                                <span className="font-medium">{formatCurrency(detailedInvoice.originalAmount || 0)}</span>
+                            </div>
+                            {detailedInvoice.discountAmount > 0 && (
+                                <>
+                                    <div className="flex justify-between text-sm text-green-600">
+                                        <span>Giảm giá:</span>
+                                        <span>-{formatCurrency(detailedInvoice.discountAmount || 0)}</span>
+                                    </div>
+                                    {detailedInvoice.notes && detailedInvoice.notes.includes('Voucher:') && (
+                                        <div className="text-xs text-gray-500 italic">
+                                            🎟️ {detailedInvoice.notes}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                            <div className="border-t pt-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-lg font-bold text-gray-800">Thành tiền:</span>
+                                    <span className="text-xl font-bold text-blue-600">
+                                        {formatCurrency(detailedInvoice.finalAmount || detailedInvoice.totalAmount || 0)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex space-x-3 pt-6 border-t">
+                    {detailedInvoice.status === 'Paid' && (
+                        <button className="flex-1 bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                            <Download className="w-5 h-5 inline mr-2" />
+                            Tải hóa đơn PDF
+                        </button>
+                    )}
+                    {detailedInvoice.status === 'Pending' && (
+                        <button 
+                            onClick={() => onPayNow(detailedInvoice)}
+                            className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                        >
+                            <CreditCard className="w-5 h-5 inline mr-2" />
+                            Thanh toán ngay
+                        </button>
+                    )}
+                    <button 
+                        onClick={onClose}
+                        className="px-6 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                    >
+                        Đóng
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Component hiển thị chi tiết hóa đơn trong thanh toán - copy từ modal
+const InvoiceDetailDisplay = ({ invoiceId }: { invoiceId: number }) => {
+    const [detailedInvoice, setDetailedInvoice] = useState<any>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const loadInvoiceDetail = async () => {
+            try {
+                setIsLoading(true);
+                
+                // Debug: Check auth token
+                const user = localStorage.getItem('user');
+                console.log('Debug: User in localStorage:', user ? 'exists' : 'not found');
+                
+                console.log('Debug: Loading invoice detail for ID:', invoiceId);
+                const response = await customerInvoiceApi.getInvoiceDetails(invoiceId);
+                console.log('Debug: API response:', response);
+                
+                if (response.success) {
+                    setDetailedInvoice(response.invoice);
+                } else {
+                    throw new Error(response.message || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('Error loading invoice detail:', err);
+                setError(err instanceof Error ? err.message : 'Unknown error');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadInvoiceDetail();
+    }, [invoiceId]);
+
+    const formatDateSafe = (dateString: string | null): string => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'N/A';
+            return date.toLocaleDateString('vi-VN');
+        } catch (error) {
+            return 'N/A';
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-8">
+                <RefreshCw className="w-8 h-8 mx-auto text-blue-600 animate-spin mb-2" />
+                <p className="text-gray-600">Đang tải chi tiết hóa đơn...</p>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="text-center py-8">
+                <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
+                <p className="text-red-600 mb-4">Lỗi tải chi tiết hóa đơn</p>
+                <p className="text-gray-600 mb-4">{error}</p>
+            </div>
+        );
+    }
+
+    if (!detailedInvoice) return null;
+
+    // Debug: Log the detailed invoice data
+    console.log('DetailedInvoice data in payment display:', detailedInvoice);
+
+    // Phân loại invoice details
+    const courtBookings = detailedInvoice.details?.filter((detail: any) => detail.type === 'court') || [];
+    const services = detailedInvoice.details?.filter((detail: any) => detail.type === 'service') || [];
+
+    console.log('Court bookings in payment:', courtBookings);
+    console.log('Services in payment:', services);
+
+    return (
+        <div className="space-y-6">
+            {/* Thông tin khách hàng */}
+            <div className="bg-gray-50 rounded-xl p-4">
+                <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                    <User className="mr-2 text-blue-600" size={18} />
+                    Thông tin khách hàng
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="flex items-center">
+                        <User className="mr-2 text-gray-400" size={16} />
+                        <span>{detailedInvoice.customerName}</span>
+                    </div>
+                    <div className="flex items-center">
+                        <Mail className="mr-2 text-gray-400" size={16} />
+                        <span>{detailedInvoice.customerEmail}</span>
+                    </div>
+                    <div className="flex items-center">
+                        <Phone className="mr-2 text-gray-400" size={16} />
+                        <span>{detailedInvoice.customerPhone}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Thông tin hóa đơn */}
+            <div className="bg-blue-50 rounded-xl p-4">
+                <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                    <FileText className="mr-2 text-blue-600" size={18} />
+                    Thông tin hóa đơn
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="flex flex-col">
+                        <span className="text-gray-600">Mã hóa đơn:</span>
+                        <span className="font-medium">#{detailedInvoice.id}</span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-gray-600">Booking ID:</span>
+                        <span className="font-medium">#{detailedInvoice.bookingId}</span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-gray-600">Ngày tạo:</span>
+                        <span className="font-medium">{formatDateSafe(detailedInvoice.invoiceDate)}</span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-gray-600">Trạng thái:</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium inline-block w-fit ${
+                            detailedInvoice.status === 'Paid' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                            {detailedInvoice.status === 'Paid' ? 'Đã thanh toán' : 'Chờ thanh toán'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Chi tiết đặt sân và dịch vụ */}
+            <div>
+                {/* Court Bookings */}
+                {courtBookings.length > 0 && (
+                    <div className="bg-blue-50 rounded-xl p-4 mb-4">
+                        <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                            <MapPin className="mr-2 text-blue-600" size={18} />
+                            Đặt sân ({courtBookings.length})
+                        </h4>
+                        <div className="space-y-3">
+                            {courtBookings.map((booking: any, index: number) => (
+                                <div key={index} className="bg-white rounded-lg p-3 border border-blue-200">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <p className="font-medium text-gray-800 mb-1">
+                                                {booking.description || booking.itemName || 'Thuê sân'}
+                                            </p>
+                                            <p className="text-sm text-gray-600 mb-2">
+                                                {booking.timeSlotInfo ? 
+                                                    `${formatDateSafe(booking.timeSlotInfo.date)} | ${booking.timeSlotInfo.startTime} - ${booking.timeSlotInfo.endTime}` :
+                                                    booking.courtName && booking.bookingDate ? 
+                                                        `${booking.courtName} • ${formatDateSafe(booking.bookingDate)}` :
+                                                        booking.description || 'Thông tin thời gian không có sẵn'
+                                                }
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-semibold text-blue-600">
+                                                {formatCurrency(booking.unitPrice || booking.amount || booking.totalPrice || 0)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Services */}
+                {services.length > 0 && (
+                    <div className="bg-green-50 rounded-xl p-4 mb-4">
+                        <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                            <Package className="mr-2 text-green-600" size={18} />
+                            Dịch vụ bổ sung ({services.length})
+                        </h4>
+                        <div className="space-y-3">
+                            {services.map((service: any, index: number) => (
+                                <div key={index} className="bg-white rounded-lg p-3 border border-green-200">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <p className="font-medium text-gray-800 mb-1">
+                                                {service.description || service.itemName || 'Dịch vụ'}
+                                            </p>
+                                            <p className="text-sm text-gray-600">
+                                                Số lượng: {service.quantity || 1} | 
+                                                Đơn giá: {formatCurrency(service.unitPrice || service.amount || 0)}
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-semibold text-green-600">
+                                                {formatCurrency(service.totalPrice || service.amount || (service.quantity * service.unitPrice) || 0)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Payment Summary */}
+                <div className="bg-gray-100 rounded-xl p-4">
+                    <h4 className="font-semibold text-gray-800 mb-3">Tổng kết thanh toán</h4>
+                    <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Tổng tiền gốc:</span>
+                            <span className="font-medium">{formatCurrency(detailedInvoice.originalAmount || 0)}</span>
+                        </div>
+                        
+                        {(detailedInvoice.discountAmount > 0) && (
+                            <div className="flex justify-between text-sm text-green-600">
+                                <span>Giảm giá:</span>
+                                <span>-{formatCurrency(detailedInvoice.discountAmount || 0)}</span>
+                            </div>
+                        )}
+                        
+                        {(detailedInvoice.voucherDescription || detailedInvoice.voucherAmount > 0) && (
+                            <div className="flex justify-between text-sm text-purple-600">
+                                <span>Voucher {detailedInvoice.voucherDescription ? `(${detailedInvoice.voucherDescription})` : ''}:</span>
+                                <span>-{formatCurrency(detailedInvoice.voucherAmount || 0)}</span>
+                            </div>
+                        )}
+                        
+                        <div className="border-t pt-2 mt-3">
+                            <div className="flex justify-between text-lg font-bold">
+                                <span>Thành tiền:</span>
+                                <span className="text-blue-600">{formatCurrency(detailedInvoice.finalAmount || detailedInvoice.totalAmount || 0)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const PaymentPage = () => {
-    const [activeTab, setActiveTab] = useState('pending'); // 'history', 'pending', 'methods', 'invoices'
+    const [activeTab, setActiveTab] = useState('invoices'); // 'pending', 'invoices' - Mặc định hiển thị hóa đơn
     const [pendingInvoicesCount, setPendingInvoicesCount] = useState(0);
     const [selectedPayment, setSelectedPayment] = useState(null);
     const [paymentStep, setPaymentStep] = useState(1); // 1: method, 2: processing, 3: result
@@ -94,12 +631,15 @@ const PaymentPage = () => {
         try {
             setPaymentStep(2); // Hiển thị loading
             
+            // Chờ một chút để auto-simulate callback có thời gian cập nhật status
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
             // Kiểm tra trạng thái thanh toán từ server
             const response = await fetch(`/api/customer/payments/momo/status/${orderId}`);
             const data = await response.json();
             
             if (data.success) {
-                const isSuccess = resultCode === '0' && data.status === 'COMPLETED';
+                const isSuccess = resultCode === '0'; // Simplify: nếu resultCode = 0 thì success
                 
                 setPaymentResult({
                     success: isSuccess,
@@ -398,54 +938,12 @@ const PaymentPage = () => {
 
                 {paymentStep === 1 && (
                     <div className="space-y-6">
-                        {/* Order Summary */}
+                        {/* Full Invoice Details */}
                         <div className="bg-white rounded-2xl p-6 shadow-lg">
-                            <h3 className="text-xl font-bold text-gray-800 mb-4">Chi tiết đơn hàng</h3>
+                            <h3 className="text-xl font-bold text-gray-800 mb-6">Chi tiết hóa đơn đầy đủ</h3>
                             
-                            <div className="space-y-3 mb-4">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Booking ID:</span>
-                                    <span className="font-medium">#{paymentData.bookingId}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Sân:</span>
-                                    <span className="font-medium">{paymentData.courtName}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Ngày giờ:</span>
-                                    <span className="font-medium">
-                                        {new Date(paymentData.bookingDate).toLocaleDateString('vi-VN')} | 
-                                        {paymentData.startTime} - {paymentData.endTime}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Giá gốc:</span>
-                                    <span className="font-medium">{formatCurrency(paymentData.originalAmount)}</span>
-                                </div>
-                                
-                                {/* Services - chỉ hiển thị với mock data */}
-                                {paymentData.services && paymentData.services.map((service, index) => (
-                                    <div key={index} className="flex justify-between text-sm text-gray-600">
-                                        <span>{service.name} x {service.quantity}</span>
-                                        <span>{formatCurrency(service.price * service.quantity)}</span>
-                                    </div>
-                                ))}
-                                
-                                {/* Discount */}
-                                {paymentData.discountAmount > 0 && (
-                                    <div className="flex justify-between text-green-600">
-                                        <span>Giảm giá:</span>
-                                        <span>-{formatCurrency(paymentData.discountAmount)}</span>
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <div className="border-t pt-4">
-                                <div className="flex justify-between text-xl font-bold">
-                                    <span>Tổng thanh toán:</span>
-                                    <span className="text-blue-600">{formatCurrency(paymentData.finalAmount)}</span>
-                                </div>
-                            </div>
+                            {/* Load Invoice Detail */}
+                            <InvoiceDetailDisplay invoiceId={paymentData.id} />
                         </div>
 
                     {/* Payment Methods */}
@@ -618,7 +1116,7 @@ const PaymentPage = () => {
                                     Xem chi tiết booking
                                 </button>
                                 <button 
-                                    onClick={() => setActiveTab('history')}
+                                    onClick={() => setActiveTab('invoices')}
                                     className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors"
                                 >
                                     Xem lịch sử thanh toán
@@ -834,106 +1332,11 @@ const PaymentPage = () => {
             
             {/* Invoice Detail Modal */}
             {selectedInvoice && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-2xl font-bold text-gray-800">
-                                Chi tiết hóa đơn #{selectedInvoice.id}
-                            </h3>
-                            <button 
-                                onClick={() => setSelectedInvoice(null)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <X size={24} />
-                            </button>
-                        </div>
-                        
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <p className="text-sm text-gray-600">Booking ID</p>
-                                    <p className="font-medium">#{selectedInvoice.bookingId}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Trạng thái</p>
-                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                        selectedInvoice.status === 'Paid' 
-                                            ? 'bg-green-100 text-green-800' 
-                                            : 'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                        {selectedInvoice.status === 'Paid' ? 'Đã thanh toán' : 'Chờ thanh toán'}
-                                    </span>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Sân</p>
-                                    <p className="font-medium">{selectedInvoice.courtName}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Ngày chơi</p>
-                                    <p className="font-medium">
-                                        {new Date(selectedInvoice.bookingDate).toLocaleDateString('vi-VN')}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Giờ chơi</p>
-                                    <p className="font-medium">
-                                        {selectedInvoice.startTime} - {selectedInvoice.endTime}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Ngày tạo hóa đơn</p>
-                                    <p className="font-medium">
-                                        {new Date(selectedInvoice.invoiceDate).toLocaleDateString('vi-VN')}
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <div className="border-t pt-4">
-                                <h4 className="font-medium text-gray-800 mb-3">Chi tiết thanh toán</h4>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">Giá gốc:</span>
-                                        <span className="font-medium">{formatCurrency(selectedInvoice.originalAmount)}</span>
-                                    </div>
-                                    {selectedInvoice.discountAmount > 0 && (
-                                        <div className="flex justify-between text-green-600">
-                                            <span>Giảm giá:</span>
-                                            <span>-{formatCurrency(selectedInvoice.discountAmount)}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between text-xl font-bold border-t pt-2">
-                                        <span>Tổng thanh toán:</span>
-                                        <span className="text-blue-600">{formatCurrency(selectedInvoice.finalAmount)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div className="flex space-x-3 pt-4">
-                                {selectedInvoice.status === 'Paid' && (
-                                    <button className="flex-1 bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 transition-colors">
-                                        <Download className="w-5 h-5 inline mr-2" />
-                                        Tải hóa đơn PDF
-                                    </button>
-                                )}
-                                {selectedInvoice.status === 'Pending' && (
-                                    <button 
-                                        onClick={() => handlePayInvoice(selectedInvoice)}
-                                        className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                                    >
-                                        <CreditCard className="w-5 h-5 inline mr-2" />
-                                        Thanh toán ngay
-                                    </button>
-                                )}
-                                <button 
-                                    onClick={() => setSelectedInvoice(null)}
-                                    className="px-6 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-                                >
-                                    Đóng
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <InvoiceDetailModal 
+                    invoice={selectedInvoice} 
+                    onClose={() => setSelectedInvoice(null)}
+                    onPayNow={handlePayInvoice}
+                />
             )}
         </div>
         );
@@ -955,10 +1358,8 @@ const PaymentPage = () => {
                 <div className="bg-white rounded-2xl p-6 shadow-lg mb-8">
                     <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
                         {[
-                            { id: 'history', label: 'Lịch sử', icon: History },
-                            { id: 'pending', label: 'Thanh toán', icon: CreditCard },
                             { id: 'invoices', label: 'Hóa đơn', icon: FileText },
-                            { id: 'methods', label: 'Phương thức', icon: Receipt }
+                            { id: 'pending', label: 'Thanh toán', icon: CreditCard }
                         ].map((tab) => {
                             const Icon = tab.icon;
                             return (
@@ -981,10 +1382,8 @@ const PaymentPage = () => {
 
                 {/* Content */}
                 <div>
-                    {activeTab === 'history' && renderPaymentHistory()}
-                    {activeTab === 'pending' && renderPendingPayment()}
                     {activeTab === 'invoices' && renderInvoices()}
-                    {activeTab === 'methods' && renderPaymentMethods()}
+                    {activeTab === 'pending' && renderPendingPayment()}
                 </div>
             </div>
         </CustomerLayout>

@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
                 'Content-Type': 'application/json',
                 // Tạm thời không gửi auth header để test
             },
-            body: JSON.stringify({ invoiceId }),
+            body: JSON.stringify({ invoiceId, source: "customer" }),
         });
 
         if (!response.ok) {

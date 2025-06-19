@@ -133,6 +133,8 @@ public class SecurityConfig {
                         .requestMatchers(new AntPathRequestMatcher("/api/customer/notifications/**")).permitAll()
                         // Test endpoints
                         .requestMatchers(new AntPathRequestMatcher("/api/customer/test")).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/api/customer/test-email/**")).permitAll()
+                        .requestMatchers(new AntPathRequestMatcher("/api/customer/test-auto-gift/**")).permitAll()
                         // Admin endpoints
                         .requestMatchers(new AntPathRequestMatcher("/api/admin/vouchers/**")).hasRole("ADMIN")
                         .requestMatchers(new AntPathRequestMatcher("/api/admin/**")).hasRole("ADMIN")

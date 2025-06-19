@@ -75,28 +75,36 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
     @Override
     @Transactional
     public MomoPayment createPayment(Invoice invoice) {
+        return createPayment(invoice, "");
+    }
+
+    @Override
+    @Transactional
+    public MomoPayment createPayment(Invoice invoice, String extraData) {
         try {
-            // Tạo payment record
+            log.info("Tạo thanh toán Momo cho hóa đơn: " + invoice.getId() + " với extraData: " + extraData);
+
+            // Tạo payment record đầu tiên
             Payment payment = new Payment();
-            payment.setBooking(invoice.getBooking());
             payment.setInvoice(invoice);
+            payment.setBooking(invoice.getBooking());
             payment.setAmount(invoice.getFinalAmount());
             payment.setPaymentMethod("MOMO");
             
-            // Thiết lập trạng thái "Chưa thanh toán" (ID = 1)
-            PaymentStatusType unpaidStatus = paymentStatusTypeRepository.findById((byte)1)
+            // Lấy PaymentStatusType "Chưa thanh toán" (giả sử ID = 1)
+            PaymentStatusType pendingStatus = paymentStatusTypeRepository.findById((byte)1)
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy trạng thái 'Chưa thanh toán'"));
-            payment.setPaymentStatus(unpaidStatus);
+            payment.setPaymentStatus(pendingStatus);
             payment = paymentRepository.save(payment);
 
             // Tạo MomoPayment record
-            String orderId = String.format("HD%06d_%d", invoice.getId(), System.currentTimeMillis());
-            String requestId = UUID.randomUUID().toString();
-
             MomoPayment momoPayment = new MomoPayment();
             momoPayment.setPayment(payment);
             momoPayment.setBooking(invoice.getBooking());
-            momoPayment.setRequestId(requestId);
+            momoPayment.setRequestId(UUID.randomUUID().toString());
+
+            String orderId = "ORDER_" + System.currentTimeMillis() + "_" + invoice.getId();
+            String requestId = momoPayment.getRequestId();
             momoPayment.setOrderId(orderId);
             momoPayment.setAmount(invoice.getFinalAmount());
             momoPayment = momoPaymentRepository.save(momoPayment);
@@ -110,22 +118,29 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
             requestBody.put("amount", invoice.getFinalAmount().longValue());
             requestBody.put("orderId", orderId);
             requestBody.put("orderInfo", "Thanh toan hoa don " + invoice.getId());
-            requestBody.put("redirectUrl", returnUrl);
+            // Sử dụng returnUrl khác nhau tùy theo role
+            String finalReturnUrl = returnUrl;
+            if ("customer".equals(extraData)) {
+                finalReturnUrl = "http://localhost:3000/api/customer/payments/momo/return";
+            } else if ("admin".equals(extraData)) {
+                finalReturnUrl = "http://localhost:3000/api/admin/payments/momo/return"; 
+            }
+            requestBody.put("redirectUrl", finalReturnUrl);
             requestBody.put("ipnUrl", notifyUrl);
             requestBody.put("requestType", "captureWallet");
-            requestBody.put("extraData", "");
+            requestBody.put("extraData", extraData); // Sử dụng extraData được truyền vào
             requestBody.put("lang", "vi");
 
             // Tạo chữ ký theo format đúng (theo thứ tự alphabet)
             String rawSignature = String.format("accessKey=%s&amount=%d&extraData=%s&ipnUrl=%s&orderId=%s&orderInfo=%s&partnerCode=%s&redirectUrl=%s&requestId=%s&requestType=%s",
                     accessKey,
                     invoice.getFinalAmount().longValue(),
-                    "",
+                    extraData, // Sử dụng extraData trong signature
                     notifyUrl,
                     orderId,
                     "Thanh toan hoa don " + invoice.getId(),
                     partnerCode,
-                    returnUrl,
+                    finalReturnUrl,
                     requestId,
                     "captureWallet"
             );
@@ -138,6 +153,7 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
             log.info("Partner Code: " + partnerCode);
             log.info("Access Key: " + accessKey);
             log.info("API Endpoint: " + apiEndpoint);
+            log.info("ExtraData: " + extraData);
             log.info("Raw Signature: " + rawSignature);
             log.info("Signature: " + signature);
             log.info("Request Body: " + requestBody.toString());
@@ -291,8 +307,6 @@ public class MomoPaymentServiceImpl implements MomoPaymentService {
             throw new RuntimeException("Không thể mô phỏng thanh toán: " + e.getMessage());
         }
     }
-
-
 
     /**
      * Tạo HMAC SHA256 signature

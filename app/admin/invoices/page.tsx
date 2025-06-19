@@ -57,6 +57,19 @@ interface Invoice {
   customerEmail: string
   customerPhone: string
   invoiceDate: string
+  
+  // Thông tin loại hóa đơn và kênh đặt
+  invoiceType?: string          // ONLINE, COUNTER, PHONE, MOBILE_APP
+  invoiceTypeDisplay?: string   // "🌐 Hóa đơn đặt online"
+  bookingChannel?: string       // ONLINE, COUNTER, PHONE, MOBILE_APP
+  bookingChannelDisplay?: string // "Đặt online"
+  bookingType?: string          // ADVANCE, URGENT, RECURRING, WALK_IN
+  bookingTypeDisplay?: string   // "Đặt trước"
+  
+  // Thông tin nhân viên (cho booking tại quầy)
+  counterStaffId?: number
+  counterStaffName?: string
+  
   originalAmount: number
   discountAmount: number
   finalAmount: number
@@ -123,6 +136,7 @@ export default function InvoicesPage() {
   const [dateFilter, setDateFilter] = useState("all")
   const [sortConfig, setSortConfig] = useState({ key: "invoiceDate", direction: "desc" })
   const [error, setError] = useState<string | null>(null)
+  const [typeFilter, setTypeFilter] = useState("all")
 
   const [formData, setFormData] = useState({
     bookingId: 0,
@@ -140,6 +154,36 @@ export default function InvoicesPage() {
     loadInvoices()
   }, [])
 
+  // Handle payment success/failure từ MoMo redirect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentSuccess = urlParams.get('paymentSuccess');
+    const orderId = urlParams.get('orderId');
+    const message = urlParams.get('message');
+
+    if (paymentSuccess !== null) {
+      if (paymentSuccess === 'true') {
+        toast({
+          title: "Thanh toan thanh cong",
+          description: message ? decodeURIComponent(message) : `Thanh toan MoMo thanh cong cho don hang ${orderId}`,
+        });
+      } else {
+        toast({
+          title: "Thanh toan that bai",
+          description: message ? decodeURIComponent(message) : `Thanh toan MoMo that bai cho don hang ${orderId}`,
+          variant: "destructive",
+        });
+      }
+      
+      // Clean URL sau khi hiển thị thông báo
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+      
+      // Reload invoices để cập nhật trạng thái
+      loadInvoices();
+    }
+  }, []);
+
   const loadInvoices = async () => {
     try {
       setIsLoading(true)
@@ -154,7 +198,7 @@ export default function InvoicesPage() {
       const response = await axios.get(`${API_URL}?${params.toString()}`, getAuthHeader())
       
       console.log("API Response:", response);
-      console.log("Invoice data sample:", response.data && response.data.length > 0 ? response.data[0] : "No invoices");
+      console.log("Invoice data sample:", response.data && Array.isArray(response.data) && response.data.length > 0 ? response.data[0] : "No invoices");
       
       if (response.data && Array.isArray(response.data)) {
         setInvoices(response.data)
@@ -233,7 +277,11 @@ export default function InvoicesPage() {
     const matchesSearch = invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           invoice.customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           invoice.id.toString().includes(searchTerm)
-    return matchesSearch
+    
+    const matchesStatus = statusFilter === "all" || invoice.status === statusFilter
+    const matchesType = typeFilter === "all" || invoice.invoiceType === typeFilter
+    
+    return matchesSearch && matchesStatus && matchesType
   })
 
   const handleAdd = () => {
@@ -258,38 +306,9 @@ export default function InvoicesPage() {
     setIsDialogOpen(true)
   }
 
-  const handleView = async (invoice: Invoice) => {
-    try {
-      console.log("Fetching invoice details for ID:", invoice.id);
-      
-      const response = await axios.get(
-        `${API_URL}/${invoice.id}/details`,
-        getAuthHeader()
-      );
-      
-      console.log("Invoice details response:", response.data);
-      
-      if (response.data && response.data.success && response.data.invoice) {
-        setCurrentInvoice(response.data.invoice);
-        setIsViewDialogOpen(true);
-      } else {
-        console.error("Invalid response format:", response.data);
-        toast({
-          title: "Lỗi",
-          description: "Không thể tải thông tin chi tiết hóa đơn",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching invoice details:", error);
-      toast({
-        title: "Lỗi",
-        description: "Không thể tải thông tin chi tiết hóa đơn",
-        variant: "destructive",
-      });
-      setCurrentInvoice(invoice);
-      setIsViewDialogOpen(true);
-    }
+  const handleView = (invoice: Invoice) => {
+    // Navigate to detail page instead of opening modal
+    window.location.href = `/admin/invoices/${invoice.id}/detail`;
   };
 
   const handleSaveInvoice = async () => {
@@ -414,36 +433,20 @@ export default function InvoicesPage() {
 
   const handlePaymentCash = async (invoice: Invoice) => {
     try {
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/bookings/${invoice.bookingId}/payments/cash`,
-        {
-          amount: invoice.finalAmount,
-          notes: "Thanh toán tiền mặt"
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeader().headers
-          },
-          withCredentials: true
-        }
-      );
-
-      if (response.data.success) {
-        toast({
-          title: "Thành công",
-          description: "Đã xử lý thanh toán tiền mặt thành công",
-        });
-        setIsViewDialogOpen(false);
-        loadInvoices();
-      } else {
-        throw new Error(response.data.message || "Có lỗi xảy ra khi xử lý thanh toán");
-      }
+      // Cập nhật trạng thái hóa đơn thành "Paid" ngay lập tức cho thanh toán tiền mặt
+      await handleUpdateStatus(invoice.id, "Paid");
+      
+      toast({
+        title: "Thanh cong",
+        description: "Da xu ly thanh toan tien mat thanh cong",
+      });
+      
+      loadInvoices();
     } catch (error: any) {
       console.error("Error processing cash payment:", error);
       toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || "Có lỗi xảy ra khi xử lý thanh toán",
+        title: "Loi", 
+        description: "Co loi xay ra khi xu ly thanh toan",
         variant: "destructive",
       });
     }
@@ -451,40 +454,50 @@ export default function InvoicesPage() {
 
   const handlePaymentMomo = async (invoice: Invoice) => {
     try {
-      const response = await axios.post<MomoCreatePaymentResponse>(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/payments/momo/create`,
-        { invoiceId: invoice.id },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeader().headers
-          },
-          withCredentials: true
-        }
-      );
+      // Sử dụng endpoint customer/admin chung
+      const response = await fetch('/api/customer/payments/momo/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          invoiceId: invoice.id,
+        }),
+      });
 
-      if (response.data.resultCode === "0") {
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Không thể tạo thanh toán MoMo');
+      }
+
+      const data = await response.json();
+      
+      if (data.resultCode === "0" && data.payUrl) {
         // Mở URL thanh toán MoMo trong cửa sổ mới
-        window.open(response.data.payUrl, "_blank");
+        window.open(data.payUrl, "_blank");
 
         // Bắt đầu kiểm tra trạng thái thanh toán
         const checkPaymentStatus = async () => {
           try {
-            const statusResponse = await axios.get<MomoPaymentStatusResponse>(
-              `${process.env.NEXT_PUBLIC_API_URL}/admin/payments/momo/status/${response.data.orderId}`,
-              { 
-                headers: getAuthHeader().headers,
-                withCredentials: true 
-              }
-            );
+            const statusResponse = await fetch(`/api/customer/payments/momo/status/${data.orderId}`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            });
 
-            if (statusResponse.data.status === "SUCCESS") {
+            if (!statusResponse.ok) {
+              throw new Error('Không thể kiểm tra trạng thái thanh toán');
+            }
+
+            const statusData = await statusResponse.json();
+
+            if (statusData.success && statusData.status === "SUCCESS") {
               await handleUpdateStatus(invoice.id, "Paid");
               toast({
-                title: "Thành công",
-                description: "Thanh toán MoMo đã hoàn tất",
+                title: "Thanh cong",
+                description: "Thanh toan MoMo da hoan tat",
               });
-              setIsViewDialogOpen(false);
               loadInvoices();
               return true;
             }
@@ -495,13 +508,13 @@ export default function InvoicesPage() {
           }
         };
 
-        // Kiểm tra trạng thái mỗi 5 giây
+        // Kiểm tra trạng thái mỗi 3 giây
         const intervalId = setInterval(async () => {
           const isCompleted = await checkPaymentStatus();
           if (isCompleted) {
             clearInterval(intervalId);
           }
-        }, 5000);
+        }, 3000);
 
         // Dừng kiểm tra sau 5 phút
         setTimeout(() => {
@@ -509,21 +522,51 @@ export default function InvoicesPage() {
         }, 5 * 60 * 1000);
 
         toast({
-          title: "Đã tạo thanh toán",
-          description: "Vui lòng hoàn tất thanh toán trên MoMo",
+          title: "Da tao thanh toan",
+          description: "Vui long hoan tat thanh toan tren MoMo",
         });
       } else {
-        throw new Error(response.data.message);
+        throw new Error(data.message || "Khong the tao thanh toan MoMo");
       }
     } catch (error: any) {
       console.error("Error creating MoMo payment:", error);
       toast({
-        title: "Lỗi",
-        description: error.response?.data?.message || "Có lỗi xảy ra khi tạo thanh toán MoMo",
+        title: "Loi",
+        description: error.message || "Co loi xay ra khi tao thanh toan MoMo",
         variant: "destructive",
       });
     }
   };
+
+  const getInvoiceTypeIcon = (type: string) => {
+    switch (type) {
+      case "ONLINE": return "🌐"
+      case "COUNTER": return "🏢"
+      case "PHONE": return "📞"
+      case "MOBILE_APP": return "📱"
+      default: return "❓"
+    }
+  }
+
+  const getInvoiceTypeColor = (type: string) => {
+    switch (type) {
+      case "ONLINE": return "bg-blue-100 text-blue-800 border-blue-200"
+      case "COUNTER": return "bg-green-100 text-green-800 border-green-200"
+      case "PHONE": return "bg-yellow-100 text-yellow-800 border-yellow-200"
+      case "MOBILE_APP": return "bg-purple-100 text-purple-800 border-purple-200"
+      default: return "bg-gray-100 text-gray-800 border-gray-200"
+    }
+  }
+
+  const getBookingTypeColor = (type: string) => {
+    switch (type) {
+      case "ADVANCE": return "bg-green-50 text-green-700"
+      case "URGENT": return "bg-orange-50 text-orange-700"
+      case "RECURRING": return "bg-blue-50 text-blue-700"
+      case "WALK_IN": return "bg-purple-50 text-purple-700"
+      default: return "bg-gray-50 text-gray-700"
+    }
+  }
 
   return (
     <AdminLayout>
@@ -559,92 +602,12 @@ export default function InvoicesPage() {
             </div>
           </div>
 
-          {/* Statistics Cards */}
-          <div className="grid gap-6 md:grid-cols-5 mb-8">
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Tổng Hóa Đơn
-                </CardTitle>
-                <FileText className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-slate-900">{stats.totalInvoices}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Tất cả hóa đơn
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Đã Thanh Toán
-                </CardTitle>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{stats.paidInvoices}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Hóa đơn đã thu tiền
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Chờ Thanh Toán
-                </CardTitle>
-                <Clock className="h-4 w-4 text-yellow-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">{stats.pendingInvoices}</div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Cần thu tiền
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Tổng Doanh Thu
-                </CardTitle>
-                <DollarSign className="h-4 w-4 text-emerald-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-emerald-600">
-                  {stats.totalRevenue.toLocaleString('vi-VN')} VNĐ
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Từ hóa đơn đã thanh toán
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-slate-600">
-                  Giá Trị Trung Bình
-                </CardTitle>
-                <TrendingUp className="h-4 w-4 text-purple-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-purple-600">
-                  {stats.avgInvoiceValue.toLocaleString('vi-VN')} VNĐ
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Giá trị hóa đơn trung bình
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Statistics Cards moved to Analytics page */}
 
           {/* Search and Filter */}
           <Card className="mb-8 border-0 shadow-lg bg-white/90 backdrop-blur-sm">
             <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
@@ -664,6 +627,19 @@ export default function InvoicesPage() {
                     <SelectItem value="Paid">Đã thanh toán</SelectItem>
                     <SelectItem value="Pending">Chờ thanh toán</SelectItem>
                     <SelectItem value="Cancelled">Đã hủy</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="border-slate-300 focus:border-blue-500 focus:ring-blue-500">
+                    <SelectValue placeholder="Loại hóa đơn" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả loại</SelectItem>
+                    <SelectItem value="ONLINE">🌐 Đặt online</SelectItem>
+                    <SelectItem value="COUNTER">🏢 Đặt tại quầy</SelectItem>
+                    <SelectItem value="PHONE">📞 Đặt qua điện thoại</SelectItem>
+                    <SelectItem value="MOBILE_APP">📱 Đặt qua app</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -717,6 +693,7 @@ export default function InvoicesPage() {
                         </div>
                       </TableHead>
                       <TableHead className="font-semibold text-slate-700">Khách hàng</TableHead>
+                      <TableHead className="font-semibold text-slate-700">Loại</TableHead>
                       <TableHead className="font-semibold text-slate-700">
                         <div className="flex items-center cursor-pointer" onClick={() => handleSort('invoiceDate')}>
                           Ngày tạo
@@ -743,7 +720,7 @@ export default function InvoicesPage() {
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12">
+                        <TableCell colSpan={10} className="text-center py-12">
                           <div className="flex items-center justify-center">
                             <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
                             <span className="text-slate-600">Đang tải dữ liệu...</span>
@@ -752,7 +729,7 @@ export default function InvoicesPage() {
                       </TableRow>
                     ) : error ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12">
+                        <TableCell colSpan={10} className="text-center py-12">
                           <p className="text-red-600 mb-4">{error}</p>
                           <Button onClick={loadInvoices} variant="outline">
                             Thử lại
@@ -761,7 +738,7 @@ export default function InvoicesPage() {
                       </TableRow>
                     ) : filteredInvoices.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-12">
+                        <TableCell colSpan={10} className="text-center py-12">
                           <div className="text-slate-500">
                             <FileText className="h-12 w-12 mx-auto mb-4 text-slate-300" />
                             <p className="text-lg font-medium">Không có dữ liệu</p>
@@ -787,6 +764,27 @@ export default function InvoicesPage() {
                             <div className="space-y-1">
                               <p className="font-medium text-slate-900">{invoice.customerName}</p>
                               <p className="text-xs text-slate-500">{invoice.customerEmail}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <Badge className={`inline-flex items-center text-xs font-medium ${getInvoiceTypeColor(invoice.invoiceType || 'ONLINE')}`}>
+                                {getInvoiceTypeIcon(invoice.invoiceType || 'ONLINE')} 
+                                <span className="ml-1">
+                                  {invoice.invoiceType === 'ONLINE' ? 'Online' : 
+                                   invoice.invoiceType === 'COUNTER' ? 'Tại quầy' :
+                                   invoice.invoiceType === 'PHONE' ? 'Điện thoại' :
+                                   invoice.invoiceType === 'MOBILE_APP' ? 'App' : 'Online'}
+                                </span>
+                              </Badge>
+                              {invoice.bookingType && (
+                                <Badge variant="secondary" className={`text-xs ${getBookingTypeColor(invoice.bookingType)}`}>
+                                  {invoice.bookingType === 'ADVANCE' ? 'Đặt trước' :
+                                   invoice.bookingType === 'URGENT' ? 'Đặt gấp' :
+                                   invoice.bookingType === 'RECURRING' ? 'Định kỳ' :
+                                   invoice.bookingType === 'WALK_IN' ? 'Vãng lai' : 'Đặt trước'}
+                                </Badge>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="text-slate-700">

@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -244,6 +246,175 @@ public class VoucherController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Tự động kiểm tra và tặng voucher cho một khách hàng cụ thể
+     */
+    @PostMapping("/auto-gift/{userId}")
+    public ResponseEntity<Map<String, Object>> autoGiftVouchersForUser(@PathVariable Integer userId) {
+        try {
+            log.info("Tự động tặng voucher cho UserId: {}", userId);
+            
+            int giftedCount = voucherService.autoGiftVouchersForUser(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("userId", userId);
+            response.put("giftedCount", giftedCount);
+            response.put("message", "Đã tặng " + giftedCount + " voucher cho khách hàng");
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Lỗi khi tự động tặng voucher cho UserId {}: {}", userId, e.getMessage());
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Lỗi: " + e.getMessage());
+            
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    /**
+     * Tự động kiểm tra và tặng voucher cho tất cả khách hàng
+     */
+    @PostMapping("/auto-gift-all")
+    public ResponseEntity<Map<String, Object>> autoGiftVouchersForAllUsers() {
+        try {
+            log.info("Tự động tặng voucher cho tất cả khách hàng");
+            
+            int processedCount = voucherService.autoGiftVouchersForAllUsers();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("processedCount", processedCount);
+            response.put("message", "Đã kiểm tra " + processedCount + " khách hàng để tặng voucher");
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Lỗi khi tự động tặng voucher cho tất cả khách hàng: {}", e.getMessage());
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Lỗi: " + e.getMessage());
+            
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    /**
+     * Lấy số lượt đặt sân của khách hàng
+     */
+    @GetMapping("/booking-count/{userId}")
+    public ResponseEntity<Map<String, Object>> getUserBookingCount(@PathVariable Integer userId) {
+        try {
+            log.info("Lấy số lượt đặt sân cho UserId: {}", userId);
+            
+            int bookingCount = voucherService.getUserBookingCount(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("userId", userId);
+            response.put("bookingCount", bookingCount);
+            response.put("message", "Khách hàng có " + bookingCount + " lượt đặt sân");
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Lỗi khi lấy số lượt đặt sân cho UserId {}: {}", userId, e.getMessage());
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Lỗi: " + e.getMessage());
+            
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    /**
+     * Kiểm tra tình trạng voucher của khách hàng
+     */
+    @GetMapping("/eligibility/{userId}")
+    public ResponseEntity<Map<String, Object>> getVoucherEligibility(@PathVariable Integer userId) {
+        try {
+            log.info("Kiểm tra tình trạng voucher cho UserId: {}", userId);
+            
+            Map<String, Object> eligibility = voucherService.getVoucherEligibility(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("userId", userId);
+            response.put("eligibility", eligibility);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Lỗi khi kiểm tra tình trạng voucher cho UserId {}: {}", userId, e.getMessage());
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Lỗi: " + e.getMessage());
+            
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    /**
+     * Lấy danh sách voucher đã được tặng cho khách hàng
+     */
+    @GetMapping("/personal/{userId}")
+    public ResponseEntity<Map<String, Object>> getPersonalVouchers(@PathVariable Integer userId) {
+        try {
+            log.info("Lấy danh sách voucher cá nhân cho UserId: {}", userId);
+            
+            Map<String, Object> personalVouchers = voucherService.getPersonalVouchers(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("userId", userId);
+            response.put("vouchers", personalVouchers);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Lỗi khi lấy voucher cá nhân cho UserId {}: {}", userId, e.getMessage());
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Lỗi: " + e.getMessage());
+            
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
+    /**
+     * Tặng voucher cá nhân thủ công cho khách hàng
+     */
+    @PostMapping("/gift-manual")
+    public ResponseEntity<Map<String, Object>> giftVoucherManually(@RequestBody Map<String, Object> request) {
+        try {
+            Integer userId = (Integer) request.get("userId");
+            Integer voucherId = (Integer) request.get("voucherId");
+            String notes = (String) request.get("notes");
+            
+            log.info("Tặng voucher thủ công - UserId: {}, VoucherId: {}", userId, voucherId);
+            
+            boolean success = voucherService.giftVoucherManually(userId, voucherId, notes);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", success);
+            response.put("userId", userId);
+            response.put("voucherId", voucherId);
+            response.put("message", success ? "Đã tặng voucher thành công" : "Không thể tặng voucher");
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Lỗi khi tặng voucher thủ công: {}", e.getMessage());
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Lỗi: " + e.getMessage());
+            
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
+
     private VoucherDTO convertToDTO(Discount voucher) {
         VoucherDTO dto = new VoucherDTO();
         dto.setId(voucher.getId());
@@ -261,6 +432,15 @@ public class VoucherController {
         dto.setDescription(voucher.getDescription());
         dto.setCreatedAt(voucher.getCreatedAt());
         dto.setUpdatedAt(voucher.getUpdatedAt());
+        
+        // Thêm các trường mới
+        if (voucher.getVoucherType() != null) {
+            dto.setVoucherType(voucher.getVoucherType().name());
+        } else {
+            dto.setVoucherType("PUBLIC");
+        }
+        dto.setRequiredBookingCount(voucher.getRequiredBookingCount());
+        dto.setCreatedBy(voucher.getCreatedBy());
 
         // Calculate computed fields
         if (voucher.getUsageLimit() != null && voucher.getUsageLimit() > 0) {
@@ -292,6 +472,15 @@ public class VoucherController {
         voucher.setValidTo(request.getValidTo());
         voucher.setDescription(request.getDescription());
         voucher.setStatus(Discount.DiscountStatus.ACTIVE);
+        
+        // Xử lý các trường mới
+        if (request.getVoucherType() != null) {
+            voucher.setVoucherType(Discount.VoucherType.valueOf(request.getVoucherType().toUpperCase()));
+        } else {
+            voucher.setVoucherType(Discount.VoucherType.PUBLIC);
+        }
+        
+        voucher.setRequiredBookingCount(request.getRequiredBookingCount());
 
         return voucher;
     }

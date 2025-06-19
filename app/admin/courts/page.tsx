@@ -332,17 +332,7 @@ export default function CourtsPage() {
         return "text-red-600";
     }
 
-    // Statistics
-    const totalCourts = courts.length;
-    const availableCourts = courts.filter(c => {
-        const statusId = typeof c.status === 'object' ? c.status.id : Number(c.status);
-        return statusId === 1;
-    }).length;
-    const maintenanceCourts = courts.filter(c => {
-        const statusId = typeof c.status === 'object' ? c.status.id : Number(c.status);
-        return statusId === 3;
-    }).length;
-    const fixedSlotCourts = courts.filter(c => c.hasFixedTimeSlots).length;
+    // Statistics moved to Analytics page
 
     return (
         <AdminLayout>
@@ -368,68 +358,7 @@ export default function CourtsPage() {
                         </Button>
                     </div>
 
-                    {/* Statistics Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-600">
-                                    Tổng Số Sân
-                                </CardTitle>
-                                <MapPin className="h-4 w-4 text-blue-600" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-slate-900">{totalCourts}</div>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Tất cả sân trong hệ thống
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-600">
-                                    Sân Trống
-                                </CardTitle>
-                                <div className="w-4 h-4 bg-green-500 rounded-full" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-green-600">{availableCourts}</div>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Sân có thể sử dụng
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-600">
-                                    Bảo Trì
-                                </CardTitle>
-                                <div className="w-4 h-4 bg-red-500 rounded-full" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-red-600">{maintenanceCourts}</div>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Sân đang bảo trì
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-slate-600">
-                                    Slot Cố Định
-                                </CardTitle>
-                                <Settings className="h-4 w-4 text-indigo-600" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-indigo-600">{fixedSlotCourts}</div>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    Sân có khung giờ cố định
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
+                    {/* Statistics Cards moved to Analytics page */}
 
                     {/* Search & Date Filter */}
                     <Card className="backdrop-blur-sm bg-white/70 border-white/50 shadow-xl">
