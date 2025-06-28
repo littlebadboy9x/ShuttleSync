@@ -19,7 +19,7 @@ public class VoucherAutoGiftService {
     /**
      * Tự động kiểm tra và tặng voucher cho tất cả khách hàng (chạy mỗi 10 phút)
      */
-    @Scheduled(fixedRate = 60000) // 1 phút
+    @Scheduled(fixedRate = 600000) // 1 phút
     public void autoGiftVouchersForAllCustomers() {
         try {
             log.info("[AUTO-GIFT] Bắt đầu kiểm tra và tặng voucher tự động...");
